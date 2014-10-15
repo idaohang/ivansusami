@@ -13,12 +13,7 @@
 #define PHONE_NUMBER_LENGTH		12
 #define PIN_LENGTH				4
 #define SMS_MAX_LENGTH			160		// should never exceed 160
-#define SERIAL_GPS_LISTEN_TIME	3000	// milliseconds
 #define SMS_QUEUE_LENGTH		10
-
-#ifdef SERIAL_DEBUG
-#define SERIAL_DEBUG_SPEED 9600
-#endif
 
 #define SMS_NONE 0
 #define SMS_LOCATION 1
@@ -264,7 +259,7 @@ void execute_command(uint8_t command)
 		reg &= ~STATE_BURST;
 #ifdef SEND_CONFIRMATION
 		enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
-#ifdef SEND_CONFIRMATION
+#endif
 		break;
 	}
 }
