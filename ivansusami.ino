@@ -30,7 +30,9 @@ char caller_phone_number[PHONE_NUMBER_LENGTH];
 char master_pin[PIN_LENGTH];
 char *COMMAND_DELIMITER = "-";			// 1-char string
 
-SoftwareSerial gps_port(8, 7);
+#ifdef SERIAL_DEBUG
+SoftwareSerial debug_port(SERIAL_DEBUG_RX_PIN, SERIAL_DEBUG_TX_PIN);
+#endif
 
 SMSGSM sms;
 
@@ -68,15 +70,14 @@ uint8_t reg;							// configuration,status and state register
 
 void get_gps_data()
 {
-	gps_port.listen();
 	uint32_t t0 = millis();
 
-	while (((millis() - t0) < SERIAL_GPS_LISTEN_TIME) || (gps_port.available()))
+	while (((millis() - t0) < SERIAL_GPS_LISTEN_TIME) || (Serial.available()))
 	{
 #if defined(SERIAL_GPS_NMEA)
-		char c = gps_port.read();
+		char c = Serial.read();
 #elif defined(SERIAL_GPS_UBLOX)
-		uint8_t c = gps_port.read();
+		uint8_t c = Serial.read();
 #endif
 		if (c > 0)
 		{
@@ -376,8 +377,8 @@ void parse_sms_text(char *sms_text)
 		i++;
 	}
 	feed_command_parser(NULL, true);	// reset parser
-	Serial.print("free RAM=");
-	Serial.println(free_ram());
+	debug_port.print("free RAM=");
+	debug_port.println(free_ram());
 }
 
 void process_sms_orders()
@@ -571,17 +572,14 @@ void write_config(boolean force)
 void setup()
 {
 #ifdef SERIAL_DEBUG
-	Serial.begin(SERIAL_DEBUG_SPEED);
-	Serial.print("free_ram=");
-	Serial.println(free_ram());
-	delay(100000);
+	debug_port.begin(SERIAL_DEBUG_SPEED);
+	debug_port.print("free_ram=");
+	debug_port.println(free_ram());
 #endif
 	gsm.begin(SERIAL_SMS_SPEED);
-#ifdef SERIAL_GPS_NMEA
-	gps_port.begin(SERIAL_GPS_SPEED);
-#endif
+	Serial.begin(SERIAL_GPS_SPEED);
 #ifdef SERIAL_DEBUG
-	Serial.println(F("Ivan-s-usami DEBUG MODE"));
+	debug_port.println(F("Ivan-s-usami DEBUG MODE"));
 #endif
 	current_fix.dt = 0;
 	read_config();
