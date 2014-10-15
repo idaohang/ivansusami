@@ -184,7 +184,7 @@ void execute_command(uint8_t command)
 	case 1:
 		// turn on alarm
 #ifdef CAN_ALARM
-		// alarm_on(); TBD
+		reg |= STATE_ALARM_ON;
 #ifdef SEND_CONFIRMATION
 		enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
 #endif
@@ -195,7 +195,7 @@ void execute_command(uint8_t command)
 	case 6:
 		// turn off alarm
 #ifdef CAN_ALARM
-		// alarm_off(); TBD
+		reg &= ~STATE_ALARM_ON;
 #ifdef SEND_CONFIRMATION
 		enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
 #endif
