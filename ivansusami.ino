@@ -64,6 +64,7 @@ uint8_t reg;							// configuration,status and state register
 #define STATE_CUTOFF_ON		B00100000
 #define STATE_SLEEPING		B01000000
 #define STATE_BURST			B10000000
+#define REG_DEFAULT			B00000000
 
 #define CHECK_PIN 			((reg & CONFIG_CHECK_PIN) == CONFIG_CHECK_PIN)
 #define CHECK_OWNER 		((reg & CONFIG_CHECK_OWNER) == CONFIG_CHECK_OWNER)
@@ -93,10 +94,18 @@ void process_gps_data()
 {
 	if (current_fix.fix == 3)	// we have 3D fix
 	{
+		if (reg & STATUS_ARMED != STATUS_ARMED)
+		{
+			reg |= STATUS_ARMED;
+		}
 		memcpy(&last_3d_fix, &current_fix, sizeof(current_fix));
 	}
 	else if (current_fix.fix = 2)
 	{
+		if (reg & STATUS_ARMED != STATUS_ARMED)
+		{
+			reg |= STATUS_ARMED;
+		}
 		memcpy(&last_2d_fix, &current_fix, sizeof(current_fix));
 	}
 }
@@ -377,8 +386,6 @@ void parse_sms_text(char *sms_text)
 		i++;
 	}
 	feed_command_parser(NULL, true);	// reset parser
-	debug_port.print("free RAM=");
-	debug_port.println(free_ram());
 }
 
 void process_sms_orders()
@@ -434,8 +441,8 @@ void process_sms_outbound_queue()
 	const prog_uchar exec_unsupported_template[] PROGMEM = "Unsupported command '%s'";
 	const prog_uchar command_unknown_template[] PROGMEM = "Unknown command '%s'";
 	const prog_uchar invalid_pin_template[] PROGMEM = "Invalid PIN %s";
-	const prog_uchar hello_world_template[] PROGMEM = "Ivan-s-usami booted";
-	const prog_uchar system_armed_template[] PROGMEM = "Ivan-s-usami armed";
+	const prog_uchar hello_world_template[] PROGMEM = "Ivan-s-usami v%s booted";
+	const prog_uchar system_armed_template[] PROGMEM = "Ivan-s-usami v%s armed";
 
 	char sms_buf[SMS_MAX_LENGTH];
 
@@ -512,11 +519,11 @@ void process_sms_outbound_queue()
 			break;
 		case SMS_HELLO_WORLD:
 			strcpy_P(eebuf, (char *)pgm_read_word(&hello_world_template));
-			sprintf(sms_buf, eebuf);
+			sprintf(sms_buf, eebuf, SOFTWARE_VERSION);
 			break;
 		case SMS_ARMED:
 			strcpy_P(eebuf, (char *)pgm_read_word(&system_armed_template));
-			sprintf(sms_buf, eebuf);
+			sprintf(sms_buf, eebuf, SOFTWARE_VERSION);
 			break;
 
 		}
@@ -583,6 +590,7 @@ void setup()
 #endif
 	current_fix.dt = 0;
 	read_config();
+	reg |= STATUS_BOOTED;
 #ifdef SEND_HELLO
 	if (CHECK_OWNER)	// send hello only when owner is set
 	{
@@ -609,7 +617,7 @@ void loop()
 #endif
 
 	process_sms_orders();
-	write_config(false);		// write to EEPROM if state of config has changed, will always write at first cycle (TBD)
+	write_config(false);		// write to EEPROM if state of config has changed, will always write at first cycle
 	if (reg & STATE_BURST == STATE_BURST)
 	{
 		enqueue_sms(SMS_LOCATION, NULL, owner_phone_number, NULL);
