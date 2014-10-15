@@ -1,12 +1,6 @@
 #define SERIAL_DEBUG
 #define SERIAL_GPS_NMEA
 #define SERIAL_GPS_SPEED 9600
-
-//#define I2C_GPS
-//#define I2C_GPS_ADDRESS 0x20
-//#define I2C_GPS_EOSBANDI
-//#define I2C_GPS_IFLYHIGH
-
 #define SERIAL_SMS_SPEED 9600
 #define CHECK_SENDER_NUMBER
 #define CHECK_PIN
