@@ -1,3 +1,9 @@
+/*
+ * Ivan-s-usami DIY GPS tracker by Andrew Evdokimov
+ *
+ * Licensed under GPLv3
+ */
+
 #include <stdint.h>
 #include <string.h>
 #include "config.h"
