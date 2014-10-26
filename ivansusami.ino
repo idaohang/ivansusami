@@ -14,6 +14,7 @@
 #include <GSM.h>
 #include <avr/pgmspace.h>
 #include <EEPROM.h>
+#include <avr/eeprom.h>
 
 #define COMMAND_MAX_TOKENS 		6
 #define PHONE_NUMBER_LENGTH		12
@@ -77,6 +78,10 @@ uint8_t reg;							// configuration,status and state register
 
 void get_gps_data()
 {
+#ifdef SERIAL_DEBUG
+	debug_port.println(F("get_gps_data() enter"));
+#endif
+
 	uint32_t t0 = millis();
 
 	while (((millis() - t0) < SERIAL_GPS_LISTEN_TIME) || (Serial.available()))
@@ -94,10 +99,16 @@ void get_gps_data()
 			}
 		}
 	}
+#ifdef SERIAL_DEBUG
+	debug_port.println(F("get_gps_data() exit"));
+#endif
 }
 
 void process_gps_data()
 {
+#ifdef SERIAL_DEBUG
+	debug_port.println(F("process_gps_data() enter"));
+#endif
 	if (current_fix.fix == 3)	// we have 3D fix
 	{
 		if (reg & STATUS_ARMED != STATUS_ARMED)
@@ -114,10 +125,17 @@ void process_gps_data()
 		}
 		memcpy(&last_2d_fix, &current_fix, sizeof(current_fix));
 	}
+#ifdef SERIAL_DEBUG
+	debug_port.println(F("process_gps_data() exit"));
+#endif
 }
 
 boolean enqueue_sms(uint8_t sms_type, uint8_t command, char *recepient, char *msg)
 {
+#ifdef SERIAL_DEBUG
+	debug_port.println(F("enqueue_sms() enter"));
+#endif
+
 	if (sms_queue_counter > (SMS_QUEUE_LENGTH - 1))
 	{
 		// unable to queue SMS, drop and set error condition
@@ -136,6 +154,9 @@ boolean enqueue_sms(uint8_t sms_type, uint8_t command, char *recepient, char *ms
 		sms_queue_counter++;
 		return true;
 	}
+#ifdef SERIAL_DEBUG
+	debug_port.println(F("enqueue_sms() exit"));
+#endif
 }
 
 void enqueue_delayed_command(uint8_t command)
@@ -396,6 +417,10 @@ void parse_sms_text(char *sms_text)
 
 void process_sms_orders()
 {
+#ifdef SERIAL_DEBUG
+	debug_port.println(F("process_sms_orders() enter"));
+#endif
+
 	uint8_t	unread_sms_position;
 	char	sms_text[SMS_MAX_LENGTH];
 
@@ -415,23 +440,43 @@ void process_sms_orders()
 		}
 		unread_sms_position = sms.IsSMSPresent(SMS_UNREAD);
 	}
+#ifdef SERIAL_DEBUG
+	debug_port.println(F("process_sms_orders() exit"));
+#endif
 }
 
 boolean send_sms(uint8_t i, char *sms_buf)
 {
+#ifdef SERIAL_DEBUG
+	debug_port.println(F("send_sms() enter"));
+	debug_port.print(F("sms = "));
+	debug_port.println(sms_buf);
+#endif
+
+
 	if (sms.SendSMS(sms_queue[i].recepient, sms_buf) == 1)	// SMS sent
 	{
 		sms_queue[i].sms_type = SMS_NONE;
+#ifdef SERIAL_DEBUG
+		debug_port.println(F("send_sms() exit1"));
+#endif
 		return true;
 	}
 	else
 	{
+#ifdef SERIAL_DEBUG
+		debug_port.println(F("send_sms() exit2"));
+#endif
 		return false;
 	}
 }
 
 void process_sms_outbound_queue()
 {
+#ifdef SERIAL_DEBUG
+	debug_port.println(F("process_sms_outbound_queue() enter"));
+#endif
+
 	typedef struct
 	{
 		char buf[5];
@@ -456,9 +501,19 @@ void process_sms_outbound_queue()
 
 	for (uint8_t i = 0; i < SMS_QUEUE_LENGTH; i++)
 	{
+#ifdef SERIAL_DEBUG
+		debug_port.print(F("psoq i = "));
+		debug_port.println(i);
+		debug_port.print(F("sms_queue[i].sms_type = "));
+		debug_port.println(sms_queue[i].sms_type);
+#endif
 		switch (sms_queue[i].sms_type)
 		{
 		case SMS_LOCATION:
+#ifdef SERIAL_DEBUG
+			debug_port.print(F("current_fix.fix = "));
+			debug_port.println(current_fix.fix);
+#endif
 			switch (current_fix.fix)
 			{
 			case 0:		// no fix, send last known 2D or 3D fix
@@ -531,9 +586,19 @@ void process_sms_outbound_queue()
 			strcpy_P(eebuf, (char *)pgm_read_word(&system_armed_template));
 			sprintf(sms_buf, eebuf, SOFTWARE_VERSION);
 			break;
-
+		case SMS_NONE:
+			break;
 		}
-		send_sms(i, sms_buf);
+
+		if (sms_queue[i].sms_type != SMS_NONE)
+		{
+#ifdef SERIAL_DEBUG
+			debug_port.println(F("Sending REGULAR SMS"));
+			debug_port.print(F("sms = "));
+			debug_port.println(sms_buf);
+#endif
+			send_sms(i, sms_buf);
+		}
 	}
 
 	sms_queue_counter = 0;
@@ -556,37 +621,102 @@ void process_sms_outbound_queue()
 		}
 		sms_error.sms_type = SMS_NONE;
 	}
+#ifdef SERIAL_DEBUG
+	debug_port.println(F("process_sms_outbound_queue() exit"));
+#endif
 }
 
 void read_config()
 {
+#ifdef SERIAL_DEBUG
+	debug_port.println(F("read_config() enter"));
+	debug_port.print(F("reg="));
+	debug_port.println(reg);
+	debug_port.print(F("location_rate_interval="));
+	debug_port.println(location_rate_interval);
+	debug_port.print(F("master_pin="));
+	debug_port.println(master_pin);
+	debug_port.print(F("owner_phone_number="));
+	debug_port.println(owner_phone_number);
+	debug_port.println(F("read_config() exit"));
+
+	debug_port.println(F("------------------"));
+	debug_port.println(F("now reading EEPROM"));
+	debug_port.println(F("------------------"));
+
+#endif
+	eeprom_read_block((void *)&reg, (void *)0, sizeof(reg));
+	eeprom_read_block((void *)&location_rate_interval, (void *)1, sizeof(location_rate_interval));
+	eeprom_read_block((void *)&master_pin, (void *)3, sizeof(master_pin));
+	eeprom_read_block((void *)&owner_phone_number, (void *)(4 + PIN_LENGTH - 1), sizeof(owner_phone_number));
+	/*
 	EEPROM_read(0, reg);
 	EEPROM_read(1, location_rate_interval);
 	EEPROM_read(3, master_pin);
 	EEPROM_read(4 + PIN_LENGTH - 1, owner_phone_number);
+	*/
+#ifdef SERIAL_DEBUG
+	debug_port.print(F("reg="));
+	debug_port.println(reg);
+	debug_port.print(F("location_rate_interval="));
+	debug_port.println(location_rate_interval);
+	debug_port.print(F("master_pin="));
+	debug_port.println(master_pin);
+	debug_port.print(F("owner_phone_number="));
+	debug_port.println(owner_phone_number);
+	debug_port.println(F("read_config() exit"));
+#endif
 	// need to add CRC check, util.h has crc8()
 }
 
 void write_config(boolean force)
 {
+#ifdef SERIAL_DEBUG
+	debug_port.println(F("write_config() enter"));
+#endif
+
 	static uint8_t prev_reg = 0;	// previous register setting
 
 	if (force || (prev_reg != reg))
 	{
+#ifdef SERIAL_DEBUG
+		debug_port.print(F("reg="));
+		debug_port.println(reg);
+		debug_port.print(F("location_rate_interval="));
+		debug_port.println(location_rate_interval);
+		debug_port.print(F("master_pin="));
+		debug_port.println(master_pin);
+		debug_port.print(F("owner_phone_number="));
+		debug_port.println(owner_phone_number);
+#endif
+		eeprom_write_block((const void *)&reg, (void *)0, sizeof(reg));
+		eeprom_write_block((const void *)&location_rate_interval, (void *)1, sizeof(location_rate_interval));
+		eeprom_write_block((const void *)&master_pin, (void *)3, sizeof(master_pin));
+		eeprom_write_block((const void *)&owner_phone_number, (void *)(4 + PIN_LENGTH - 1), sizeof(owner_phone_number));
+		/*
 		EEPROM_write(0, reg);
 		EEPROM_write(1, location_rate_interval);
 		EEPROM_write(3, master_pin);
 		EEPROM_write(4 + PIN_LENGTH - 1, owner_phone_number);
+		*/
 		prev_reg = reg;
 		// need to add CRC, util.h has crc8()
 	}
+#ifdef SERIAL_DEBUG
+	debug_port.println(F("write_config() exit"));
+#endif
 }
 
 void setup()
 {
+
+	for (uint8_t i = 0; i < 100; i++)
+	{
+		EEPROM.write(i, 0);
+	}
 #ifdef SERIAL_DEBUG
 	debug_port.begin(SERIAL_DEBUG_SPEED);
-	debug_port.print("free_ram=");
+	debug_port.print(F("free_ram="));
 	debug_port.println(free_ram());
 #endif
 	gsm.begin(SERIAL_SMS_SPEED);
@@ -597,9 +727,13 @@ void setup()
 	current_fix.dt = 0;
 	read_config();
 	reg |= STATUS_BOOTED;
+	reg &= ~STATUS_ARMED;
 #ifdef SEND_HELLO
 	if (CHECK_OWNER)	// send hello only when owner is set
 	{
+#ifdef SERIAL_DEBUG
+		debug_port.println(F("Send HELLO SMS"));
+#endif
 		enqueue_sms(SMS_HELLO_WORLD, NULL, owner_phone_number, NULL);
 	}
 #endif
@@ -607,6 +741,9 @@ void setup()
 
 void loop()
 {
+#ifdef SERIAL_DEBUG
+	debug_port.println(F("loop() enter"));
+#endif
 	get_gps_data();
 	process_gps_data();
 
@@ -616,6 +753,10 @@ void loop()
 	{
 		if ((reg & STATUS_ARMED == STATUS_ARMED) && CHECK_OWNER)
 		{
+#ifdef SERIAL_DEBUG
+			debug_port.print(F("Sending ARMED SMS to "));
+			debug_port.println(owner_phone_number);
+#endif
 			enqueue_sms(SMS_ARMED, NULL, owner_phone_number, NULL);
 			armed_sent = true;
 		}
@@ -629,5 +770,7 @@ void loop()
 		enqueue_sms(SMS_LOCATION, NULL, owner_phone_number, NULL);
 	}
 	process_sms_outbound_queue();
-
+#ifdef SERIAL_DEBUG
+	debug_port.println(F("loop() exit"));
+#endif
 }
