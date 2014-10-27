@@ -134,6 +134,15 @@ boolean enqueue_sms(uint8_t sms_type, uint8_t command, char *recepient, char *ms
 {
 #ifdef SERIAL_DEBUG
 	debug_port.println(F("enqueue_sms() enter"));
+	debug_port.print(F("sms_type="));
+	debug_port.println(sms_type);
+	debug_port.print(F("command="));
+	debug_port.println(command);
+	debug_port.print(F("recepient="));
+	debug_port.println(recepient);
+	debug_port.print(F("msg="));
+	debug_port.println(msg);
+
 #endif
 
 	if (sms_queue_counter > (SMS_QUEUE_LENGTH - 1))
@@ -149,7 +158,7 @@ boolean enqueue_sms(uint8_t sms_type, uint8_t command, char *recepient, char *ms
 	{
 		sms_queue[sms_queue_counter].sms_type = sms_type;
 		sms_queue[sms_queue_counter].command = command;
-		memcpy(&sms_queue[sms_queue_counter].recepient, &recepient, sizeof(recepient));
+		strncpy(sms_queue[sms_queue_counter].recepient, recepient, PHONE_NUMBER_LENGTH);
 		sms_queue[sms_queue_counter].msg = msg;
 		sms_queue_counter++;
 		return true;
@@ -451,6 +460,9 @@ boolean send_sms(uint8_t i, char *sms_buf)
 	debug_port.println(F("send_sms() enter"));
 	debug_port.print(F("sms = "));
 	debug_port.println(sms_buf);
+	debug_port.print(F("recepient = "));
+	debug_port.println(sms_queue[i].recepient);
+
 #endif
 
 
@@ -458,14 +470,14 @@ boolean send_sms(uint8_t i, char *sms_buf)
 	{
 		sms_queue[i].sms_type = SMS_NONE;
 #ifdef SERIAL_DEBUG
-		debug_port.println(F("send_sms() exit1"));
+		debug_port.println(F("send_sms() exit OK"));
 #endif
 		return true;
 	}
 	else
 	{
 #ifdef SERIAL_DEBUG
-		debug_port.println(F("send_sms() exit2"));
+		debug_port.println(F("send_sms() exit ERROR"));
 #endif
 		return false;
 	}
@@ -483,17 +495,17 @@ void process_sms_outbound_queue()
 	} fbuf;
 
 	fbuf ftoa_buf[2];	// buffer for float-to-string conversion
-	char eebuf[114];	// buffer for reading PROGMEM EEPROM variables, size appropriately
+	char eebuf[115];	// buffer for reading PROGMEM EEPROM variables, size appropriately
 
-	const prog_uchar fix_3d_location_template[] PROGMEM = "3D fix lat:%ld.%ld lon:%ld.%ld alt:%ld speed:%d hdop:%s vdop:%s nsat:%d\nhttp://maps.google.com/?q=%ld.%ld,%ld.%ld";
-	const prog_uchar fix_2d_location_template[] PROGMEM = "2D fix! lat:%ld.%ld lon:%ld.%ld hdop:%s nsat:%d\nLast 3D fix %d sec ago: lat:%ld.%ld lon:%ld.%ld alt:%ld speed:%d";
-	const prog_uchar fix_no_location_template[] PROGMEM = "No fix! Last fix %d sec ago: lat:%ld.%ld lon:%ld.%ld alt:%ld speed:%d hdop:%s vdop:%s nsat:%d fix:%dD";
-	const prog_uchar exec_complete_template[] PROGMEM = "Command '%s' executed";
-	const prog_uchar exec_unsupported_template[] PROGMEM = "Unsupported command '%s'";
-	const prog_uchar command_unknown_template[] PROGMEM = "Unknown command '%s'";
-	const prog_uchar invalid_pin_template[] PROGMEM = "Invalid PIN %s";
-	const prog_uchar hello_world_template[] PROGMEM = "Ivan-s-usami v%s booted";
-	const prog_uchar system_armed_template[] PROGMEM = "Ivan-s-usami v%s armed";
+	static const prog_char fix_3d_location_template[] PROGMEM = "3D fix lat:%ld.%ld lon:%ld.%ld alt:%ld speed:%d hdop:%s vdop:%s nsat:%d\nhttp://maps.google.com/?q=%ld.%ld,%ld.%ld";
+	static const prog_char fix_2d_location_template[] PROGMEM = "2D fix! lat:%ld.%ld lon:%ld.%ld hdop:%s nsat:%d\nLast 3D fix %d sec ago: lat:%ld.%ld lon:%ld.%ld alt:%ld speed:%d";
+	static const prog_char fix_no_location_template[] PROGMEM = "No fix! Last fix %d sec ago: lat:%ld.%ld lon:%ld.%ld alt:%ld speed:%d hdop:%s vdop:%s nsat:%d fix:%dD";
+	static const prog_char exec_complete_template[] PROGMEM = "Command '%s' executed";
+	static const prog_char exec_unsupported_template[] PROGMEM = "Unsupported command '%s'";
+	static const prog_char command_unknown_template[] PROGMEM = "Unknown command '%s'";
+	static const prog_char invalid_pin_template[] PROGMEM = "Invalid PIN %s";
+	static const prog_char hello_world_template[] PROGMEM = "Ivan-s-usami v%s booted";
+	static const prog_char system_armed_template[] PROGMEM = "Ivan-s-usami v%s armed";
 
 	char sms_buf[SMS_MAX_LENGTH];
 
@@ -518,15 +530,21 @@ void process_sms_outbound_queue()
 			{
 			case 0:		// no fix, send last known 2D or 3D fix
 			case 1:
+
 				if (last_3d_fix.dt > last_2d_fix.dt)
 				{
 					last_fix = last_3d_fix;
 				}
-				else
+				else if (last_3d_fix.dt < last_2d_fix.dt)
 				{
 					last_fix = last_2d_fix;
 				}
-				strcpy_P(eebuf, (char *)pgm_read_word(&fix_no_location_template));
+				else	// never had fix
+				{
+					last_fix = current_fix;
+				}
+
+				strcpy_P(eebuf, fix_no_location_template);
 				sprintf(sms_buf, eebuf,
 						(millis() - last_fix.dt) / 1000,
 						last_fix.lat / 10000000L, abs(last_fix.lat % 10000000L),
@@ -535,9 +553,10 @@ void process_sms_outbound_queue()
 						ftoa(ftoa_buf[0].buf, last_fix.hdop, 2),
 						ftoa(ftoa_buf[1].buf, last_fix.vdop, 2),
 						last_fix.numsat, last_fix.fix);
+
 				break;
 			case 2:		// 2D fix, send current and last 3D fix
-				strcpy_P(eebuf, (char *)pgm_read_word(&fix_2d_location_template));
+				strcpy_P(eebuf, fix_2d_location_template);
 				sprintf(sms_buf, eebuf,
 						current_fix.lat / 10000000L, abs(current_fix.lat % 10000000L),
 						current_fix.lon / 10000000L, abs(current_fix.lon % 10000000L),
@@ -547,9 +566,10 @@ void process_sms_outbound_queue()
 						last_3d_fix.lat / 10000000L, abs(last_3d_fix.lat % 10000000L),
 						last_3d_fix.lon / 10000000L, abs(last_3d_fix.lon % 10000000L),
 						last_3d_fix.alt, last_3d_fix.speed);
+
 				break;
 			case 3:		// 3D fix, send current
-				strcpy_P(eebuf, (char *)pgm_read_word(&fix_3d_location_template));
+				strcpy_P(eebuf, fix_3d_location_template);
 				sprintf(sms_buf, eebuf,
 						current_fix.lat / 10000000L, abs(current_fix.lat % 10000000L),
 						current_fix.lon / 10000000L, abs(current_fix.lon % 10000000L),
@@ -559,31 +579,33 @@ void process_sms_outbound_queue()
 						current_fix.numsat,
 						current_fix.lat / 10000000L, abs(current_fix.lat % 10000000L),
 						current_fix.lon / 10000000L, abs(current_fix.lon % 10000000L));
+
 				break;
 			}
 			break;
+
 		case SMS_EXEC_COMPLETE:
-			strcpy_P(eebuf, (char *)pgm_read_word(&exec_complete_template));
+			strcpy_P(eebuf, exec_complete_template);
 			sprintf(sms_buf, eebuf, command_list[sms_queue[i].command]);
 			break;
 		case SMS_EXEC_UNSUPPORTED:
-			strcpy_P(eebuf, (char *)pgm_read_word(&exec_unsupported_template));
+			strcpy_P(eebuf, exec_unsupported_template);
 			sprintf(sms_buf, eebuf, command_list[sms_queue[i].command]);
 			break;
 		case SMS_COMMAND_UNKNOWN:
-			strcpy_P(eebuf, (char *)pgm_read_word(&command_unknown_template));
+			strcpy_P(eebuf, command_unknown_template);
 			sprintf(sms_buf, eebuf, sms_queue[i].msg);
 			break;
 		case SMS_INVALID_PIN:
-			strcpy_P(eebuf, (char *)pgm_read_word(&invalid_pin_template));
+			strcpy_P(eebuf, invalid_pin_template);
 			sprintf(sms_buf, eebuf, sms_queue[i].msg);
 			break;
 		case SMS_HELLO_WORLD:
-			strcpy_P(eebuf, (char *)pgm_read_word(&hello_world_template));
+			strcpy_P(eebuf, hello_world_template);
 			sprintf(sms_buf, eebuf, SOFTWARE_VERSION);
 			break;
 		case SMS_ARMED:
-			strcpy_P(eebuf, (char *)pgm_read_word(&system_armed_template));
+			strcpy_P(eebuf, system_armed_template);
 			sprintf(sms_buf, eebuf, SOFTWARE_VERSION);
 			break;
 		case SMS_NONE:
@@ -600,6 +622,7 @@ void process_sms_outbound_queue()
 			send_sms(i, sms_buf);
 		}
 	}
+
 
 	sms_queue_counter = 0;
 	// scan queue for remaining SMSs and push them to queue head
@@ -628,27 +651,16 @@ void process_sms_outbound_queue()
 
 void read_config()
 {
-#ifdef SERIAL_DEBUG
-	debug_port.println(F("read_config() enter"));
-	debug_port.print(F("reg="));
-	debug_port.println(reg);
-	debug_port.print(F("location_rate_interval="));
-	debug_port.println(location_rate_interval);
-	debug_port.print(F("master_pin="));
-	debug_port.println(master_pin);
-	debug_port.print(F("owner_phone_number="));
-	debug_port.println(owner_phone_number);
-	debug_port.println(F("read_config() exit"));
-
-	debug_port.println(F("------------------"));
-	debug_port.println(F("now reading EEPROM"));
-	debug_port.println(F("------------------"));
-
-#endif
-	eeprom_read_block((void *)&reg, (void *)0, sizeof(reg));
-	eeprom_read_block((void *)&location_rate_interval, (void *)1, sizeof(location_rate_interval));
-	eeprom_read_block((void *)&master_pin, (void *)3, sizeof(master_pin));
-	eeprom_read_block((void *)&owner_phone_number, (void *)(4 + PIN_LENGTH - 1), sizeof(owner_phone_number));
+	if (EEPROM.read(4) == 255)	// notinitialized, PIN string should not contain 0xFF
+	{
+	}
+	else
+	{
+		eeprom_read_block((void *)&reg, (void *)0, sizeof(reg));
+		eeprom_read_block((void *)&location_rate_interval, (void *)1, sizeof(location_rate_interval));
+		eeprom_read_block((void *)&master_pin, (void *)3, sizeof(master_pin));
+		eeprom_read_block((void *)&owner_phone_number, (void *)(4 + PIN_LENGTH - 1), sizeof(owner_phone_number));
+	}
 	/*
 	EEPROM_read(0, reg);
 	EEPROM_read(1, location_rate_interval);
@@ -709,11 +721,6 @@ void write_config(boolean force)
 
 void setup()
 {
-
-	for (uint8_t i = 0; i < 100; i++)
-	{
-		EEPROM.write(i, 0);
-	}
 #ifdef SERIAL_DEBUG
 	debug_port.begin(SERIAL_DEBUG_SPEED);
 	debug_port.print(F("free_ram="));
@@ -725,6 +732,10 @@ void setup()
 	debug_port.println(F("Ivan-s-usami DEBUG MODE"));
 #endif
 	current_fix.dt = 0;
+	for (uint8_t i = 0; i < SMS_QUEUE_LENGTH; i++)
+	{
+		sms_queue[i].sms_type = SMS_NONE;
+	}
 	read_config();
 	reg |= STATUS_BOOTED;
 	reg &= ~STATUS_ARMED;
@@ -768,6 +779,13 @@ void loop()
 	if (reg & STATE_BURST == STATE_BURST)
 	{
 		enqueue_sms(SMS_LOCATION, NULL, owner_phone_number, NULL);
+	}
+	for (uint8_t i = 0; i < SMS_QUEUE_LENGTH; i++)
+	{
+		debug_port.print("sq[");
+		debug_port.print(i);
+		debug_port.print("]=");
+		debug_port.println(sms_queue[i].sms_type);
 	}
 	process_sms_outbound_queue();
 #ifdef SERIAL_DEBUG
