@@ -21,6 +21,7 @@
 #define PIN_LENGTH				4
 #define SMS_MAX_LENGTH			160		// should never exceed 160
 #define SMS_QUEUE_LENGTH		10
+#define SMS_MSG_LENGTH			20
 
 #define SMS_NONE 0
 #define SMS_LOCATION 1
@@ -48,7 +49,7 @@ typedef struct
 	uint8_t sms_type;
 	uint8_t command;
 	char recepient[PHONE_NUMBER_LENGTH];
-	char *msg;
+	char msg[SMS_MSG_LENGTH];
 } sms_queue_entry_t;
 
 sms_queue_entry_t sms_queue[SMS_QUEUE_LENGTH];
@@ -150,8 +151,8 @@ boolean enqueue_sms(uint8_t sms_type, uint8_t command, char *recepient, char *ms
 		// unable to queue SMS, drop and set error condition
 		sms_error.sms_type = SMS_ERROR_QUEUE_FULL;
 		sms_error.command = 0;
-		memcpy(&sms_error.recepient, &recepient, sizeof(recepient));
-		sms_error.msg = "SMS queue overflow!";
+		strncpy(sms_error.recepient, recepient, PHONE_NUMBER_LENGTH);
+		strncpy(sms_error.msg, "SMS queue overflow!", 20);
 		return false;
 	}
 	else
@@ -159,7 +160,7 @@ boolean enqueue_sms(uint8_t sms_type, uint8_t command, char *recepient, char *ms
 		sms_queue[sms_queue_counter].sms_type = sms_type;
 		sms_queue[sms_queue_counter].command = command;
 		strncpy(sms_queue[sms_queue_counter].recepient, recepient, PHONE_NUMBER_LENGTH);
-		sms_queue[sms_queue_counter].msg = msg;
+		strncpy(sms_queue[sms_queue_counter].msg, msg, SMS_MSG_LENGTH);
 		sms_queue_counter++;
 		return true;
 	}
