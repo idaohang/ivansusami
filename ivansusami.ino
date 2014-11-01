@@ -4,6 +4,7 @@
  * Licensed under GPLv3
  */
 
+#include <Arduino.h>
 #include <stdint.h>
 #include <string.h>
 #include "config.h"
@@ -32,14 +33,27 @@
 #define SMS_HELLO_WORLD 6
 #define SMS_ARMED 7
 #define SMS_ERROR_QUEUE_FULL 8
+#define SMS_EXEC_FAILED 9
 
-char owner_phone_number[PHONE_NUMBER_LENGTH];
-char caller_phone_number[PHONE_NUMBER_LENGTH];
-char master_pin[PIN_LENGTH];
+char owner_phone_number[PHONE_NUMBER_LENGTH + 1];
+char caller_phone_number[PHONE_NUMBER_LENGTH + 1];
+char master_pin[PIN_LENGTH + 1];
 char *COMMAND_DELIMITER = "-";			// 1-char string
 
 #ifdef SERIAL_DEBUG
 SoftwareSerial debug_port(SERIAL_DEBUG_RX_PIN, SERIAL_DEBUG_TX_PIN);
+#endif
+
+#ifdef CAN_CUTOFF
+#define CUTOFF_PIN 5
+#define CUTOFF_POSITION_OFF 10
+#define CUTOFF_POSITION_ON 30
+#endif
+
+#ifdef CAN_ALARM
+#define ALARM_PIN 6
+#define ALARM_POSITION_OFF 10
+#define ALARM_POSITION_ON 30
 #endif
 
 SMSGSM sms;
@@ -48,8 +62,8 @@ typedef struct
 {
 	uint8_t sms_type;
 	uint8_t command;
-	char recepient[PHONE_NUMBER_LENGTH];
-	char msg[SMS_MSG_LENGTH];
+	char recepient[PHONE_NUMBER_LENGTH + 1];
+	char msg[SMS_MSG_LENGTH + 1];
 } sms_queue_entry_t;
 
 sms_queue_entry_t sms_queue[SMS_QUEUE_LENGTH];
@@ -57,10 +71,10 @@ sms_queue_entry_t sms_error;
 
 uint8_t sms_queue_counter = 0;
 
-char *command_list[] = 			{"?", "alarm", "awake", "checkowner", "checkpin", "cutoff", "noalarm", "nocheckowner", "nocheckpin", "rate", "sleep", "w", "burst", "noburst"};
-uint8_t command_param_count[] = {0,   0,       0,       0,            0,          0,        0,         0,              0,            1,      0,       0,   0,       0};
+char *command_list[] = 			{"?", "alarm", "awake", "checkowner", "checkpin", "cutoff", "noalarm", "nocheckowner", "nocheckpin", "rate", "sleep", "w", "burst", "noburst", "nocutoff" };
+uint8_t command_param_count[] = {0,   0,       0,       0,            1,          0,        0,         0,              0,            1,      0,       0,   0,       0,         0};
 
-uint16_t location_rate_interval = 0;	// interval for sending location SMS, in minutes. 0 == do not send location SMS periodically
+long location_rate_interval = 0;	// interval for sending location SMS, in minutes. 0 == do not send location SMS periodically
 
 uint8_t reg;							// configuration,status and state register
 
@@ -79,14 +93,10 @@ uint8_t reg;							// configuration,status and state register
 
 void get_gps_data()
 {
-#ifdef SERIAL_DEBUG
-	debug_port.println(F("get_gps_data() enter"));
-#endif
-
 	uint32_t t0 = millis();
 	boolean gotdata = false;
 
-	while (((millis() - t0) < SERIAL_GPS_LISTEN_TIME) || (Serial.available()))
+	while (((millis() - t0) < (SERIAL_GPS_LISTEN_TIME / 16)) || (Serial.available()))
 	{
 #if defined(SERIAL_GPS_NMEA)
 		char c = Serial.read();
@@ -105,7 +115,7 @@ void get_gps_data()
 	if (!gotdata)
 	{
 #ifdef SERIAL_DEBUG
-		debug_port.println(F("No GPS data"));
+		//debug_port.println(F("No GPS data"));
 #endif
 		current_fix.lat = 0;
 		current_fix.lon = 0;
@@ -117,20 +127,14 @@ void get_gps_data()
 		current_fix.fix = 0;
 		current_fix.dt = millis();
 	}
-#ifdef SERIAL_DEBUG
-	debug_port.println(F("get_gps_data() exit"));
-#endif
 }
 
 void process_gps_data()
 {
-#ifdef SERIAL_DEBUG
-	debug_port.println(F("process_gps_data() enter"));
-#endif
 	if (current_fix.fix == 3)	// we have 3D fix
 	{
 #ifdef SERIAL_DEBUG
-		debug_port.println(F("GPS 3D fix"));
+		//debug_port.println(F("GPS 3D fix"));
 #endif
 		if (reg & STATUS_ARMED != STATUS_ARMED)
 		{
@@ -141,7 +145,7 @@ void process_gps_data()
 	else if (current_fix.fix == 2)
 	{
 #ifdef SERIAL_DEBUG
-		debug_port.println(F("GPS 2D fix"));
+		//debug_port.println(F("GPS 2D fix"));
 #endif
 		if (reg & STATUS_ARMED != STATUS_ARMED)
 		{
@@ -152,12 +156,8 @@ void process_gps_data()
 #ifdef SERIAL_DEBUG
 	else
 	{
-		debug_port.println(F("GPS no fix"));
+		//debug_port.println(F("GPS no fix"));
 	}
-#endif
-
-#ifdef SERIAL_DEBUG
-	debug_port.println(F("process_gps_data() exit"));
 #endif
 }
 
@@ -165,15 +165,6 @@ boolean enqueue_sms(uint8_t sms_type, uint8_t command, char *recepient, char *ms
 {
 #ifdef SERIAL_DEBUG
 	debug_port.println(F("enqueue_sms() enter"));
-	debug_port.print(F("sms_type="));
-	debug_port.println(sms_type);
-	debug_port.print(F("command="));
-	debug_port.println(command);
-	debug_port.print(F("recepient="));
-	debug_port.println(recepient);
-	debug_port.print(F("msg="));
-	debug_port.println(msg);
-
 #endif
 
 	if (sms_queue_counter > (SMS_QUEUE_LENGTH - 1))
@@ -181,27 +172,25 @@ boolean enqueue_sms(uint8_t sms_type, uint8_t command, char *recepient, char *ms
 		// unable to queue SMS, drop and set error condition
 		sms_error.sms_type = SMS_ERROR_QUEUE_FULL;
 		sms_error.command = 0;
-		strncpy(sms_error.recepient, recepient, PHONE_NUMBER_LENGTH);
-		strncpy(sms_error.msg, "SMS queue overflow!", 20);
+		strcpy(sms_error.recepient, recepient);
+		strcpy(sms_error.msg, "SMS queue overflow!");
+#ifdef SERIAL_DEBUG
+		debug_port.println(F("enqueue_sms() exit FALSE"));
+#endif
 		return false;
 	}
 	else
 	{
 		sms_queue[sms_queue_counter].sms_type = sms_type;
 		sms_queue[sms_queue_counter].command = command;
-		strncpy(sms_queue[sms_queue_counter].recepient, recepient, PHONE_NUMBER_LENGTH);
-		strncpy(sms_queue[sms_queue_counter].msg, msg, SMS_MSG_LENGTH);
+		strcpy(sms_queue[sms_queue_counter].recepient, recepient);
+		strcpy(sms_queue[sms_queue_counter].msg, msg);
 		sms_queue_counter++;
+#ifdef SERIAL_DEBUG
+		debug_port.println(F("enqueue_sms() exit TRUE"));
+#endif
 		return true;
 	}
-#ifdef SERIAL_DEBUG
-	debug_port.println(F("enqueue_sms() exit"));
-#endif
-}
-
-void enqueue_delayed_command(uint8_t command)
-{
-
 }
 
 boolean valid_sms_sender(char *phone_number)
@@ -234,8 +223,44 @@ boolean valid_pin(char *pin)
 	return true;
 }
 
-void execute_pcommand(uint8_t command, uint8_t *params, uint8_t param_count)
+// execute command with parameters
+void execute_pcommand(uint8_t command, long *params, uint8_t param_count)
 {
+	switch (command)
+	{
+	case 4:
+		// turn on PIN check
+		reg |= CONFIG_CHECK_PIN;
+		sprintf(master_pin, "%d", params[0]);
+		write_config(true);	// save new PIN in EEPROM
+		// will always send confirmation for this command
+		enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
+		break;
+	case 9:
+		// set location SMS rate, once in PARAM minutes
+		if (params[0] > 0)
+		{
+			if (CHECK_OWNER)
+			{
+				location_rate_interval = params[0];
+				enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
+			}
+			else
+			{
+				enqueue_sms(SMS_EXEC_FAILED, command, caller_phone_number, NULL);
+			}
+		}
+		else
+		{
+			if (params[0] < 0)
+			{
+				params[0] = 0;
+			}
+			location_rate_interval = params[0];
+			enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
+		}
+		break;
+	}
 }
 
 // execute command without parameters
@@ -246,12 +271,16 @@ void execute_command(uint8_t command)
 	case 0:
 	case 11:
 		// get current or best GPS location
+#ifdef SERIAL_DEBUG
+		debug_port.println(F("Enqueue NORMAL location SMS"));
+#endif
 		enqueue_sms(SMS_LOCATION, NULL, caller_phone_number, NULL);
 		break;
 	case 1:
 		// turn on alarm
 #ifdef CAN_ALARM
 		reg |= STATE_ALARM_ON;
+		analogWrite(ALARM_PIN, ALARM_POSITION_ON);
 #ifdef SEND_CONFIRMATION
 		enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
 #endif
@@ -263,6 +292,7 @@ void execute_command(uint8_t command)
 		// turn off alarm
 #ifdef CAN_ALARM
 		reg &= ~STATE_ALARM_ON;
+		analogWrite(ALARM_PIN, ALARM_POSITION_OFF);
 #ifdef SEND_CONFIRMATION
 		enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
 #endif
@@ -293,19 +323,13 @@ void execute_command(uint8_t command)
 	case 3:
 		// turn on owner check
 		reg |= CONFIG_CHECK_OWNER;
-		memcpy(&owner_phone_number, &caller_phone_number, sizeof(caller_phone_number));
+		strcpy(owner_phone_number, caller_phone_number);
 		// will always send confirmation for this command
 		enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
 		break;
 	case 7:
 		// turn off owner check
 		reg &= ~CONFIG_CHECK_OWNER;
-		// will always send confirmation for this command
-		enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
-		break;
-	case 4:
-		// turn on PIN check
-		reg |= CONFIG_CHECK_PIN;
 		// will always send confirmation for this command
 		enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
 		break;
@@ -319,17 +343,40 @@ void execute_command(uint8_t command)
 		// cut off power
 #ifdef CAN_CUTOFF
 		// will always send confirmation for this command
+		reg |= STATE_CUTOFF_ON;
 		enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
+		write_config(true);
+		analogWrite(CUTOFF_PIN, CUTOFF_POSITION_ON);
 #else
 		enqueue_sms(SMS_EXEC_UNSUPPORTED, command, caller_phone_number, NULL);
 #endif
 		break;
+	case 14:
+		// cancel cut off power
+#ifdef CAN_CUTOFF
+		// will always send confirmation for this command
+		reg &= ~STATE_CUTOFF_ON;
+		enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
+		write_config(true);
+		analogWrite(CUTOFF_PIN, CUTOFF_POSITION_OFF);
+#else
+		enqueue_sms(SMS_EXEC_UNSUPPORTED, command, caller_phone_number, NULL);
+#endif
+		break;
+
 	case 12:
 		// send location every cycle
-		reg |= STATE_BURST;
+		if (CHECK_OWNER)
+		{
+			reg |= STATE_BURST;
 #ifdef SEND_CONFIRMATION
-		enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
+			enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
 #endif
+		}
+		else
+		{
+			enqueue_sms(SMS_EXEC_FAILED, command, caller_phone_number, NULL);
+		}
 		break;
 	case 13:
 		// cancel send location every cycle
@@ -345,7 +392,7 @@ void feed_command_parser(char *token, boolean reset)
 {
 	static uint8_t prev_command = 255;
 	static uint8_t params_remaining = 0;
-	static uint8_t params[COMMAND_MAX_TOKENS - 1];
+	static long params[COMMAND_MAX_TOKENS - 1];
 	static uint8_t params_counter = 0;
 	static uint8_t command_list_count = sizeof(command_param_count) / sizeof(command_param_count[0]);
 	uint8_t i = 0;
@@ -361,7 +408,7 @@ void feed_command_parser(char *token, boolean reset)
 
 	if (params_remaining > 0)		// parsing parameters
 	{
-		params[params_counter] = atoi(token);
+		params[params_counter] = atol(token);
 		params_counter++;
 		params_remaining--;
 
@@ -519,8 +566,10 @@ void process_sms_outbound_queue()
 
 	static const prog_char fix_3d_location_template[] PROGMEM = "3D fix lat:%ld.%ld lon:%ld.%ld alt:%ld speed:%d hdop:%s vdop:%s nsat:%d\nhttp://maps.google.com/?q=%ld.%ld,%ld.%ld";
 	static const prog_char fix_2d_location_template[] PROGMEM = "2D fix! lat:%ld.%ld lon:%ld.%ld hdop:%s nsat:%d\nLast 3D fix %d sec ago: lat:%ld.%ld lon:%ld.%ld alt:%ld speed:%d";
-	static const prog_char fix_no_location_template[] PROGMEM = "No fix! Last fix %d sec ago: lat:%ld.%ld lon:%ld.%ld alt:%ld speed:%d hdop:%s vdop:%s nsat:%d fix:%dD";
+	static const prog_char fix_no_location_template[] PROGMEM = "No fix! Last fix %ld sec ago: lat:%ld.%ld lon:%ld.%ld alt:%ld speed:%d hdop:%s vdop:%s nsat:%d fix:%dD";
+	static const prog_char fix_never_location_template[] PROGMEM = "No fix! Have never had a fix";
 	static const prog_char exec_complete_template[] PROGMEM = "Command '%s' executed";
+	static const prog_char exec_failed_template[] PROGMEM = "Command '%s' failed";
 	static const prog_char exec_unsupported_template[] PROGMEM = "Unsupported command '%s'";
 	static const prog_char command_unknown_template[] PROGMEM = "Unknown command '%s'";
 	static const prog_char invalid_pin_template[] PROGMEM = "Invalid PIN %s";
@@ -533,12 +582,7 @@ void process_sms_outbound_queue()
 
 	for (uint8_t i = 0; i < SMS_QUEUE_LENGTH; i++)
 	{
-#ifdef SERIAL_DEBUG
-		debug_port.print(F("psoq i = "));
-		debug_port.println(i);
-		debug_port.print(F("sms_queue[i].sms_type = "));
-		debug_port.println(sms_queue[i].sms_type);
-#endif
+
 		switch (sms_queue[i].sms_type)
 		{
 		case SMS_LOCATION:
@@ -550,71 +594,66 @@ void process_sms_outbound_queue()
 			{
 			case 0:		// no fix, send last known 2D or 3D fix
 			case 1:
+				if ((last_3d_fix.dt == 0) && (last_2d_fix.dt == 0))
+				{
+					strcpy_P(eebuf, fix_never_location_template);
+					sprintf(sms_buf, eebuf);
+					break;
+				}
 
 				if (last_3d_fix.dt > last_2d_fix.dt)
 				{
-#ifdef SERIAL_DEBUG
-					debug_port.println(F("last_fix = last_3d_fix"));
-#endif
 					last_fix = last_3d_fix;
 				}
 				else if (last_3d_fix.dt < last_2d_fix.dt)
 				{
-#ifdef SERIAL_DEBUG
-					debug_port.println(F("last_fix = last_2d_fix"));
-#endif
 					last_fix = last_2d_fix;
-				}
-				else	// never had fix
-				{
-#ifdef SERIAL_DEBUG
-					debug_port.println(F("last_fix = current_fix"));
-#endif
-					last_fix = current_fix;
 				}
 
 				strcpy_P(eebuf, fix_no_location_template);
 				sprintf(sms_buf, eebuf,
-						(millis() - last_fix.dt) / 1000,
-						last_fix.lat / 10000000L, abs(last_fix.lat % 10000000L),
-						last_fix.lon / 10000000L, abs(last_fix.lon % 10000000L),
+						(long)((millis() - last_fix.dt) / 1000L / 16L),
+						(long)(last_fix.lat / 10000000L), (long)(abs(last_fix.lat % 10000000L)),
+						(long)(last_fix.lon / 10000000L), (long)(abs(last_fix.lon % 10000000L)),
 						last_fix.alt, last_fix.speed,
 						ftoa(ftoa_buf[0].buf, last_fix.hdop, 2),
 						ftoa(ftoa_buf[1].buf, last_fix.vdop, 2),
 						last_fix.numsat, last_fix.fix);
-
 				break;
 			case 2:		// 2D fix, send current and last 3D fix
 				strcpy_P(eebuf, fix_2d_location_template);
 				sprintf(sms_buf, eebuf,
-						current_fix.lat / 10000000L, abs(current_fix.lat % 10000000L),
-						current_fix.lon / 10000000L, abs(current_fix.lon % 10000000L),
+						(long)(current_fix.lat / 10000000L), (long)(abs(current_fix.lat % 10000000L)),
+						(long)(current_fix.lon / 10000000L), (long)(abs(current_fix.lon % 10000000L)),
 						ftoa(ftoa_buf[0].buf, current_fix.hdop, 2),
 						current_fix.numsat,
-						(millis() - last_3d_fix.dt) / 1000,
-						last_3d_fix.lat / 10000000L, abs(last_3d_fix.lat % 10000000L),
-						last_3d_fix.lon / 10000000L, abs(last_3d_fix.lon % 10000000L),
+						(long)((millis() - last_3d_fix.dt) / 1000L / 16L),
+						(long)(last_3d_fix.lat / 10000000L), (long)(abs(last_3d_fix.lat % 10000000L)),
+						(long)(last_3d_fix.lon / 10000000L), (long)(abs(last_3d_fix.lon % 10000000L)),
 						last_3d_fix.alt, last_3d_fix.speed);
 
 				break;
 			case 3:		// 3D fix, send current
 				strcpy_P(eebuf, fix_3d_location_template);
 				sprintf(sms_buf, eebuf,
-						current_fix.lat / 10000000L, abs(current_fix.lat % 10000000L),
-						current_fix.lon / 10000000L, abs(current_fix.lon % 10000000L),
+						(long)(current_fix.lat / 10000000L), (long)(abs(current_fix.lat % 10000000L)),
+						(long)(current_fix.lon / 10000000L), (long)(abs(current_fix.lon % 10000000L)),
 						current_fix.alt, current_fix.speed,
 						ftoa(ftoa_buf[0].buf, current_fix.hdop, 2),
 						ftoa(ftoa_buf[1].buf, current_fix.vdop, 2),
 						current_fix.numsat,
-						current_fix.lat / 10000000L, abs(current_fix.lat % 10000000L),
-						current_fix.lon / 10000000L, abs(current_fix.lon % 10000000L));
-
+						(long)(current_fix.lat / 10000000L), (long)(abs(current_fix.lat % 10000000L)),
+						(long)(current_fix.lon / 10000000L), (long)(abs(current_fix.lon % 10000000L)));
 				break;
 			}
 			break;
 
 		case SMS_EXEC_COMPLETE:
 			strcpy_P(eebuf, exec_complete_template);
+			sprintf(sms_buf, eebuf, command_list[sms_queue[i].command]);
+			break;
+		case SMS_EXEC_FAILED:
+			strcpy_P(eebuf, exec_failed_template);
 			sprintf(sms_buf, eebuf, command_list[sms_queue[i].command]);
 			break;
 		case SMS_EXEC_UNSUPPORTED:
@@ -643,11 +682,6 @@ void process_sms_outbound_queue()
 
 		if (sms_queue[i].sms_type != SMS_NONE)
 		{
-#ifdef SERIAL_DEBUG
-			debug_port.println(F("Sending REGULAR SMS"));
-			debug_port.print(F("sms = "));
-			debug_port.println(sms_buf);
-#endif
 			send_sms(i, sms_buf);
 		}
 	}
@@ -659,6 +693,10 @@ void process_sms_outbound_queue()
 	{
 		if (sms_queue[i].sms_type != SMS_NONE)
 		{
+#ifdef SERIAL_DEBUG
+			debug_port.print(F("Enqueing unsent SMS at queue position #"));
+			debug_port.println(i);
+#endif
 			enqueue_sms(sms_queue[i].sms_type, sms_queue[i].command, owner_phone_number, sms_queue[i].msg);
 		}
 	}
@@ -709,10 +747,6 @@ void read_config()
 
 void write_config(boolean force)
 {
-#ifdef SERIAL_DEBUG
-	debug_port.println(F("write_config() enter"));
-#endif
-
 	static uint8_t prev_reg = 0;	// previous register setting
 
 	if (force || (prev_reg != reg))
@@ -740,13 +774,34 @@ void write_config(boolean force)
 		prev_reg = reg;
 		// need to add CRC, util.h has crc8()
 	}
-#ifdef SERIAL_DEBUG
-	debug_port.println(F("write_config() exit"));
-#endif
 }
 
 void setup()
 {
+	TCCR0B = TCCR0B & 0b11111000 | 0x05;	// set PWN frequency to low
+	read_config();
+#ifdef CAN_CUTOFF
+	pinMode(CUTOFF_PIN, OUTPUT);
+	if ((reg & STATE_CUTOFF_ON) == STATE_CUTOFF_ON)
+	{
+		analogWrite(CUTOFF_PIN, CUTOFF_POSITION_ON);
+	}
+	else
+	{
+		analogWrite(CUTOFF_PIN, CUTOFF_POSITION_OFF);
+	}
+#endif
+#ifdef CAN_ALARM
+	pinMode(ALARM_PIN, OUTPUT);
+	if ((reg & STATE_ALARM_ON) == STATE_ALARM_ON)
+	{
+		analogWrite(ALARM_PIN, ALARM_POSITION_ON);
+	}
+	else
+	{
+		analogWrite(ALARM_PIN, ALARM_POSITION_OFF);
+	}
+#endif
 #ifdef SERIAL_DEBUG
 	debug_port.begin(SERIAL_DEBUG_SPEED);
 	debug_port.print(F("free_ram="));
@@ -762,7 +817,6 @@ void setup()
 	{
 		sms_queue[i].sms_type = SMS_NONE;
 	}
-	read_config();
 	reg |= STATUS_BOOTED;
 	reg &= ~STATUS_ARMED;
 #ifdef SEND_HELLO
@@ -778,6 +832,7 @@ void setup()
 
 void loop()
 {
+	static uint32_t last_location_sent_time = 0;			// time of previously sent location SMS in RATE mode
 	get_gps_data();
 	process_gps_data();
 
@@ -799,16 +854,24 @@ void loop()
 
 	process_sms_orders();
 	write_config(false);		// write to EEPROM if state of config has changed, will always write at first cycle
-	if (reg & STATE_BURST == STATE_BURST)
+
+	if (((reg & STATE_BURST) == STATE_BURST) && CHECK_OWNER)	// send location SMS every cycle in BURST mode
 	{
+#ifdef SERIAL_DEBUG
+		debug_port.println(F("Enqueue BURST location SMS"));
+#endif
 		enqueue_sms(SMS_LOCATION, NULL, owner_phone_number, NULL);
 	}
-	for (uint8_t i = 0; i < SMS_QUEUE_LENGTH; i++)
+	else if ((location_rate_interval > 0) && CHECK_OWNER)						// send location SMS every location_rate_interval minutes
 	{
-		debug_port.print("sq[");
-		debug_port.print(i);
-		debug_port.print("]=");
-		debug_port.println(sms_queue[i].sms_type);
+		if ((millis() - last_location_sent_time) >= location_rate_interval * 60 * 1000 / 16)
+		{
+#ifdef SERIAL_DEBUG
+			debug_port.println(F("Enqueue RATE location SMS"));
+#endif
+			enqueue_sms(SMS_LOCATION, NULL, owner_phone_number, NULL);
+			last_location_sent_time = millis();
+		}
 	}
 	process_sms_outbound_queue();
 }
