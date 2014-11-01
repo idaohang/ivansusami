@@ -457,10 +457,6 @@ void parse_sms_text(char *sms_text)
 
 void process_sms_orders()
 {
-#ifdef SERIAL_DEBUG
-	debug_port.println(F("process_sms_orders() enter"));
-#endif
-
 	uint8_t	unread_sms_position;
 	char	sms_text[SMS_MAX_LENGTH];
 
@@ -480,9 +476,6 @@ void process_sms_orders()
 		}
 		unread_sms_position = sms.IsSMSPresent(SMS_UNREAD);
 	}
-#ifdef SERIAL_DEBUG
-	debug_port.println(F("process_sms_orders() exit"));
-#endif
 }
 
 boolean send_sms(uint8_t i, char *sms_buf)
@@ -516,10 +509,6 @@ boolean send_sms(uint8_t i, char *sms_buf)
 
 void process_sms_outbound_queue()
 {
-#ifdef SERIAL_DEBUG
-	debug_port.println(F("process_sms_outbound_queue() enter"));
-#endif
-
 	typedef struct
 	{
 		char buf[5];
@@ -564,14 +553,23 @@ void process_sms_outbound_queue()
 
 				if (last_3d_fix.dt > last_2d_fix.dt)
 				{
+#ifdef SERIAL_DEBUG
+					debug_port.println(F("last_fix = last_3d_fix"));
+#endif
 					last_fix = last_3d_fix;
 				}
 				else if (last_3d_fix.dt < last_2d_fix.dt)
 				{
+#ifdef SERIAL_DEBUG
+					debug_port.println(F("last_fix = last_2d_fix"));
+#endif
 					last_fix = last_2d_fix;
 				}
 				else	// never had fix
 				{
+#ifdef SERIAL_DEBUG
+					debug_port.println(F("last_fix = current_fix"));
+#endif
 					last_fix = current_fix;
 				}
 
@@ -675,9 +673,6 @@ void process_sms_outbound_queue()
 		}
 		sms_error.sms_type = SMS_NONE;
 	}
-#ifdef SERIAL_DEBUG
-	debug_port.println(F("process_sms_outbound_queue() exit"));
-#endif
 }
 
 void read_config()
@@ -783,9 +778,6 @@ void setup()
 
 void loop()
 {
-#ifdef SERIAL_DEBUG
-	debug_port.println(F("loop() enter"));
-#endif
 	get_gps_data();
 	process_gps_data();
 
@@ -819,7 +811,4 @@ void loop()
 		debug_port.println(sms_queue[i].sms_type);
 	}
 	process_sms_outbound_queue();
-#ifdef SERIAL_DEBUG
-	debug_port.println(F("loop() exit"));
-#endif
 }
