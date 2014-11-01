@@ -84,6 +84,7 @@ void get_gps_data()
 #endif
 
 	uint32_t t0 = millis();
+	boolean gotdata = false;
 
 	while (((millis() - t0) < SERIAL_GPS_LISTEN_TIME) || (Serial.available()))
 	{
@@ -97,8 +98,24 @@ void get_gps_data()
 			if (gps_new_frame(c))
 			{
 				current_fix.dt = millis();
+				gotdata = true;
 			}
 		}
+	}
+	if (!gotdata)
+	{
+#ifdef SERIAL_DEBUG
+		debug_port.println(F("No GPS data"));
+#endif
+		current_fix.lat = 0;
+		current_fix.lon = 0;
+		current_fix.hdop = 0;
+		current_fix.vdop = 0;
+		current_fix.speed = 0;
+		current_fix.alt = 0;
+		current_fix.numsat = 0;
+		current_fix.fix = 0;
+		current_fix.dt = millis();
 	}
 #ifdef SERIAL_DEBUG
 	debug_port.println(F("get_gps_data() exit"));
@@ -112,20 +129,33 @@ void process_gps_data()
 #endif
 	if (current_fix.fix == 3)	// we have 3D fix
 	{
+#ifdef SERIAL_DEBUG
+		debug_port.println(F("GPS 3D fix"));
+#endif
 		if (reg & STATUS_ARMED != STATUS_ARMED)
 		{
 			reg |= STATUS_ARMED;
 		}
 		memcpy(&last_3d_fix, &current_fix, sizeof(current_fix));
 	}
-	else if (current_fix.fix = 2)
+	else if (current_fix.fix == 2)
 	{
+#ifdef SERIAL_DEBUG
+		debug_port.println(F("GPS 2D fix"));
+#endif
 		if (reg & STATUS_ARMED != STATUS_ARMED)
 		{
 			reg |= STATUS_ARMED;
 		}
 		memcpy(&last_2d_fix, &current_fix, sizeof(current_fix));
 	}
+#ifdef SERIAL_DEBUG
+	else
+	{
+		debug_port.println(F("GPS no fix"));
+	}
+#endif
+
 #ifdef SERIAL_DEBUG
 	debug_port.println(F("process_gps_data() exit"));
 #endif

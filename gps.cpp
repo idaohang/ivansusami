@@ -143,7 +143,18 @@ bool gps_new_frame(uint8_t data)
 		case GPGSA_FRAME:
 			switch (param)
 			{
-			case 2: current_fix.fix = atoi(string);
+			case 2: if (string[0] == '3')
+				{
+					current_fix.fix = 3;
+				}
+				else if (string[0] == '2')
+				{
+					current_fix.fix = 2;
+				}
+				else
+				{
+					current_fix.fix = 0;
+				}
 				break;
 			case 16: current_fix.hdop = atof(string);
 				break;

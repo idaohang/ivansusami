@@ -1,3 +1,5 @@
+#include <SoftwareSerial.h>
+
 #define SOFTWARE_VERSION "0.1"
 
 #define SERIAL_DEBUG
@@ -22,3 +24,4 @@
 #define SEND_CONFIRMATION				// send SMS confirmation for each successfully executed command
 #define SEND_HELLO						// send SMS to device owner (if set) upon tracker successful boot-up
 #define SEND_ARMED						// send SMS to device owner (if set) right after first fix aquired. Highly recommended!
+
