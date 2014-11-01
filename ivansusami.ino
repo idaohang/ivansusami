@@ -243,10 +243,13 @@ void execute_pcommand(uint8_t command, long *params, uint8_t param_count)
 			if (CHECK_OWNER)
 			{
 				location_rate_interval = params[0];
+#ifdef SEND_CONFIRMATION
 				enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
+#endif
 			}
 			else
 			{
+				// always send confirmation on failure
 				enqueue_sms(SMS_EXEC_FAILED, command, caller_phone_number, NULL);
 			}
 		}
@@ -257,7 +260,9 @@ void execute_pcommand(uint8_t command, long *params, uint8_t param_count)
 				params[0] = 0;
 			}
 			location_rate_interval = params[0];
+#ifdef SEND_CONFIRMATION
 			enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
+#endif
 		}
 		break;
 	}
