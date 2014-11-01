@@ -11,8 +11,8 @@
 #include "gps.h"
 #include "util.h"
 #include <SoftwareSerial.h>
-#include <sms.h>
-#include <GSM.h>
+#include "GSM.h"
+#include "sms.h"
 #include <avr/pgmspace.h>
 #include <EEPROM.h>
 #include <avr/eeprom.h>
