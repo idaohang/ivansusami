@@ -577,7 +577,7 @@ void process_sms_outbound_queue()
 	static const prog_char exec_failed_template[] PROGMEM = "Command '%s' failed";
 	static const prog_char exec_unsupported_template[] PROGMEM = "Unsupported command '%s'";
 	static const prog_char command_unknown_template[] PROGMEM = "Unknown command '%s'";
-	static const prog_char invalid_pin_template[] PROGMEM = "Invalid PIN %s";
+	static const prog_char invalid_pin_template[] PROGMEM = "Invalid PIN '%s'";
 	static const prog_char hello_world_template[] PROGMEM = "Ivan-s-usami v%s booted";
 	static const prog_char system_armed_template[] PROGMEM = "Ivan-s-usami v%s armed";
 
