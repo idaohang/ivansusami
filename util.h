@@ -2,6 +2,7 @@
 #include <Arduino.h>
 
 char *ftoa(char *a, double f, int precision);
+long labs(long l);
 int free_ram();
 byte crc8(const byte *data, byte len);
 

@@ -136,7 +136,7 @@ void process_gps_data()
 #ifdef SERIAL_DEBUG
 		//debug_port.println(F("GPS 3D fix"));
 #endif
-		if (reg & STATUS_ARMED != STATUS_ARMED)
+		if ((reg & STATUS_ARMED) != STATUS_ARMED)
 		{
 			reg |= STATUS_ARMED;
 		}
@@ -147,7 +147,7 @@ void process_gps_data()
 #ifdef SERIAL_DEBUG
 		//debug_port.println(F("GPS 2D fix"));
 #endif
-		if (reg & STATUS_ARMED != STATUS_ARMED)
+		if ((reg & STATUS_ARMED) != STATUS_ARMED)
 		{
 			reg |= STATUS_ARMED;
 		}
@@ -594,6 +594,10 @@ void process_sms_outbound_queue()
 #ifdef SERIAL_DEBUG
 			debug_port.print(F("current_fix.fix = "));
 			debug_port.println(current_fix.fix);
+			debug_port.print(F("current_fix.lat = "));
+			debug_port.println(current_fix.lat);
+			debug_port.print(F("current_fix.lon = "));
+			debug_port.println(current_fix.lon);
 #endif
 			switch (current_fix.fix)
 			{
@@ -618,8 +622,8 @@ void process_sms_outbound_queue()
 				strcpy_P(eebuf, fix_no_location_template);
 				sprintf(sms_buf, eebuf,
 						(long)((millis() - last_fix.dt) / 1000L / 16L),
-						(long)(last_fix.lat / 10000000L), (long)(abs(last_fix.lat % 10000000L)),
-						(long)(last_fix.lon / 10000000L), (long)(abs(last_fix.lon % 10000000L)),
+						(long)(last_fix.lat / 10000000L), labs(last_fix.lat % 10000000L),
+						(long)(last_fix.lon / 10000000L), labs(last_fix.lon % 10000000L),
 						last_fix.alt, last_fix.speed,
 						ftoa(ftoa_buf[0].buf, last_fix.hdop, 2),
 						ftoa(ftoa_buf[1].buf, last_fix.vdop, 2),
@@ -628,27 +632,27 @@ void process_sms_outbound_queue()
 			case 2:		// 2D fix, send current and last 3D fix
 				strcpy_P(eebuf, fix_2d_location_template);
 				sprintf(sms_buf, eebuf,
-						(long)(current_fix.lat / 10000000L), (long)(abs(current_fix.lat % 10000000L)),
-						(long)(current_fix.lon / 10000000L), (long)(abs(current_fix.lon % 10000000L)),
+						(long)(current_fix.lat / 10000000L), labs(current_fix.lat % 10000000L),
+						(long)(current_fix.lon / 10000000L), labs(current_fix.lon % 10000000L),
 						ftoa(ftoa_buf[0].buf, current_fix.hdop, 2),
 						current_fix.numsat,
 						(long)((millis() - last_3d_fix.dt) / 1000L / 16L),
-						(long)(last_3d_fix.lat / 10000000L), (long)(abs(last_3d_fix.lat % 10000000L)),
-						(long)(last_3d_fix.lon / 10000000L), (long)(abs(last_3d_fix.lon % 10000000L)),
+						(long)(last_3d_fix.lat / 10000000L), labs(last_3d_fix.lat % 10000000L),
+						(long)(last_3d_fix.lon / 10000000L), labs(last_3d_fix.lon % 10000000L),
 						last_3d_fix.alt, last_3d_fix.speed);
 
 				break;
 			case 3:		// 3D fix, send current
 				strcpy_P(eebuf, fix_3d_location_template);
 				sprintf(sms_buf, eebuf,
-						(long)(current_fix.lat / 10000000L), (long)(abs(current_fix.lat % 10000000L)),
-						(long)(current_fix.lon / 10000000L), (long)(abs(current_fix.lon % 10000000L)),
+						(long)(current_fix.lat / 10000000L), labs(current_fix.lat % 10000000L),
+						(long)(current_fix.lon / 10000000L), labs(current_fix.lon % 10000000L),
 						current_fix.alt, current_fix.speed,
 						ftoa(ftoa_buf[0].buf, current_fix.hdop, 2),
 						ftoa(ftoa_buf[1].buf, current_fix.vdop, 2),
 						current_fix.numsat,
-						(long)(current_fix.lat / 10000000L), (long)(abs(current_fix.lat % 10000000L)),
-						(long)(current_fix.lon / 10000000L), (long)(abs(current_fix.lon % 10000000L)));
+						(long)(current_fix.lat / 10000000L), labs(current_fix.lat % 10000000L),
+						(long)(current_fix.lon / 10000000L), labs(current_fix.lon % 10000000L));
 				break;
 			}
 			break;
@@ -690,7 +694,6 @@ void process_sms_outbound_queue()
 			send_sms(i, sms_buf);
 		}
 	}
-
 
 	sms_queue_counter = 0;
 	// scan queue for remaining SMSs and push them to queue head
@@ -845,13 +848,14 @@ void loop()
 	static boolean armed_sent = false;
 	if (!armed_sent)
 	{
-		if ((reg & STATUS_ARMED == STATUS_ARMED) && CHECK_OWNER)
+		if (((reg & STATUS_ARMED) == STATUS_ARMED) && CHECK_OWNER)
 		{
 #ifdef SERIAL_DEBUG
 			debug_port.print(F("Sending ARMED SMS to "));
 			debug_port.println(owner_phone_number);
 #endif
 			enqueue_sms(SMS_ARMED, NULL, owner_phone_number, NULL);
+			enqueue_sms(SMS_LOCATION, NULL, owner_phone_number, NULL);
 			armed_sent = true;
 		}
 	}

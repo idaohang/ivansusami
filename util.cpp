@@ -16,6 +16,18 @@ char *ftoa(char *a, double f, int precision)
 	return ret;
 }
 
+long labs(long l)
+{
+	if (l >= 0L)
+	{
+		return l;
+	}
+	else
+	{
+		return ((-1L) * l);
+	};
+}
+
 int free_ram()
 {
 	extern int __heap_start, *__brkval;

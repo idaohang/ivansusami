@@ -1,5 +1,4 @@
 #include "SIM900.h"  
-#include "Streaming.h"
 
 #define _GSM_CONNECTION_TOUT_ 5
 #define _TCP_CONNECTION_TOUT_ 20
