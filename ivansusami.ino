@@ -93,6 +93,7 @@ uint8_t reg;							// configuration,status and state register
 
 void get_gps_data()
 {
+	debug_port.println(F("get_gps_data() entry"));
 	uint32_t t0 = millis();
 	boolean gotdata = false;
 
@@ -107,6 +108,7 @@ void get_gps_data()
 		{
 			if (gps_new_frame(c))
 			{
+				debug_port.println(F("GPS_NEW_FRAME"));
 				current_fix.dt = millis();
 				gotdata = true;
 			}
@@ -127,6 +129,7 @@ void get_gps_data()
 		current_fix.fix = 0;
 		current_fix.dt = millis();
 	}
+	debug_port.println(F("get_gps_data() exit"));
 }
 
 void process_gps_data()
@@ -621,7 +624,7 @@ void process_sms_outbound_queue()
 
 				strcpy_P(eebuf, fix_no_location_template);
 				sprintf(sms_buf, eebuf,
-						(long)((millis() - last_fix.dt) / 1000L / 16L),
+						(long)((millis() - last_fix.dt) * 16L / 1000L),
 						(long)(last_fix.lat / 10000000L), labs(last_fix.lat % 10000000L),
 						(long)(last_fix.lon / 10000000L), labs(last_fix.lon % 10000000L),
 						last_fix.alt, last_fix.speed,
@@ -636,7 +639,7 @@ void process_sms_outbound_queue()
 						(long)(current_fix.lon / 10000000L), labs(current_fix.lon % 10000000L),
 						ftoa(ftoa_buf[0].buf, current_fix.hdop, 2),
 						current_fix.numsat,
-						(long)((millis() - last_3d_fix.dt) / 1000L / 16L),
+						(long)((millis() - last_3d_fix.dt) * 16L / 1000L),
 						(long)(last_3d_fix.lat / 10000000L), labs(last_3d_fix.lat % 10000000L),
 						(long)(last_3d_fix.lon / 10000000L), labs(last_3d_fix.lon % 10000000L),
 						last_3d_fix.alt, last_3d_fix.speed);
@@ -786,6 +789,7 @@ void write_config(boolean force)
 
 void setup()
 {
+	pinMode(13, OUTPUT);
 	TCCR0B = TCCR0B & 0b11111000 | 0x05;	// set PWN frequency to low
 	read_config();
 #ifdef CAN_CUTOFF

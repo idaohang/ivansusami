@@ -214,16 +214,19 @@ struct ubx_nav_posllh
 	uint32_t	horizontal_accuracy;
 	uint32_t	vertical_accuracy;
 };
-struct ubx_nav_status
+
+struct ubx_nav_dop
 {
 	uint32_t	time;				// GPS msToW
-	uint8_t		fix_type;
-	uint8_t		fix_status;
-	uint8_t		differential_status;
-	uint8_t		res;
-	uint32_t	time_to_first_fix;
-	uint32_t	uptime;				// milliseconds
+	uint16_t	gdop;
+	uint16_t	pdop;
+	uint16_t	tdop;
+	uint16_t	vdop;
+	uint16_t	hdop;
+	uint16_t	ndop;
+	uint16_t	edop;
 };
+
 struct ubx_nav_solution
 {
 	uint32_t	time;
@@ -268,6 +271,7 @@ enum ubs_protocol_bytes
 	MSG_ACK_ACK = 0x01,
 	MSG_POSLLH = 0x2,
 	MSG_STATUS = 0x3,
+	MSG_DOP = 0x4,
 	MSG_SOL = 0x6,
 	MSG_VELNED = 0x12,
 	MSG_CFG_PRT = 0x00,
@@ -315,7 +319,7 @@ static uint8_t	    _disable_counter;
 static union
 {
 	ubx_nav_posllh		posllh;
-	ubx_nav_status		status;
+	ubx_nav_dop			dop;
 	ubx_nav_solution	solution;
 	ubx_nav_velned		velned;
 	uint8_t	bytes[];
@@ -333,31 +337,28 @@ void _update_checksum(uint8_t *data, uint8_t len, uint8_t &ck_a, uint8_t &ck_b)
 
 bool UBLOX_parse_gps(void)
 {
-
 	switch (_msg_id)
 	{
 	case MSG_POSLLH:
 		current_fix.lon	                = _buffer.posllh.longitude;
 		current_fix.lat	                = _buffer.posllh.latitude;
 		current_fix.alt 	 	        = _buffer.posllh.altitude_msl / 10 / 100;     //alt in m
-		//i2c_dataset.status.gps3dfix	= next_fix;
 		_new_position = true;
 		break;
-	case MSG_STATUS:
-		next_fix	= (_buffer.status.fix_status & NAV_STATUS_FIX_VALID) && (_buffer.status.fix_type == FIX_3D);
-		//if (!next_fix) i2c_dataset.status.gps3dfix = false;
+	case MSG_DOP:
+		current_fix.hdop                = ((float)_buffer.dop.hdop) / 100.0;
+		current_fix.vdop	            = ((float)_buffer.dop.vdop) / 100.0;
 		break;
 	case MSG_SOL:
-		next_fix	= (_buffer.solution.fix_status & NAV_STATUS_FIX_VALID) && (_buffer.solution.fix_type == FIX_3D);
-		//if (!next_fix) i2c_dataset.status.gps3dfix = false;
-		//i2c_dataset.status.numsats	= _buffer.solution.satellites;
-		//GPS_hdop		= _buffer.solution.position_DOP;
-		//debug[3] = GPS_hdop;
+		current_fix.fix 				= _buffer.solution.fix_type;
+		if (current_fix.fix > 3)
+		{
+			current_fix.fix = 3;
+		}
+		current_fix.numsat 				= _buffer.solution.satellites;
 		break;
 	case MSG_VELNED:
-		//speed_3d	= _buffer.velned.speed_3d;				// cm/s
-		//i2c_dataset.ground_speed = _buffer.velned.speed_2d;				// cm/s
-		//i2c_dataset.ground_course = (uint16_t)(_buffer.velned.heading_2d / 10000);	// Heading 2D deg * 100000 rescaled to deg * 10
+		current_fix.speed 				= (uint8_t)(_buffer.velned.speed_2d * 36 / 10000);
 		_new_speed = true;
 		break;
 	default:
@@ -366,12 +367,15 @@ bool UBLOX_parse_gps(void)
 
 	// we only return true when we get new position and speed data
 	// this ensures we don't use stale data
+	/*
 	if (_new_position && _new_speed)
 	{
 		_new_speed = _new_position = false;
 		return true;
 	}
 	return false;
+	*/
+	return true;
 }
 
 
@@ -411,7 +415,6 @@ bool gps_new_frame(uint8_t data)
 	case 5:
 		_step++;
 		_ck_b += (_ck_a += data);			// checksum byte
-
 		_payload_length += (uint16_t)(data << 8);
 		if (_payload_length > 512)
 		{
@@ -421,6 +424,7 @@ bool gps_new_frame(uint8_t data)
 		_payload_counter = 0;				// prepare to receive payload
 		break;
 	case 6:
+		digitalWrite(13, HIGH);
 		_ck_b += (_ck_a += data);			// checksum byte
 		if (_payload_counter < sizeof(_buffer))
 		{
