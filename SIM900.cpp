@@ -85,7 +85,6 @@ int SIMCOM900::read(char* result, int resultlength)
 	for(i=0; i<resultlength;i++){
 		temp=gsm.read();
 		if(temp>0){
-			Serial.print(temp);
 			result[i]=temp;
 		}
 	}
@@ -123,7 +122,6 @@ int SIMCOM900::read(char* result, int resultlength)
 
 boolean SIMCOM900::readSMS(char* msg, int msglength, char* number, int nlength)
 {
-  Serial.println(F("This method is deprecated! Please use GetSMS in the SMS class."));
   long index;
   char *p_char; 
   char *p_char1;
@@ -349,7 +347,6 @@ void SIMCOM900::SimpleRead()
 	if(_cell.available()>0){
 		datain=_cell.read();
 		if(datain>0){
-			Serial.print(datain);
 		}
 	}
 }
@@ -400,7 +397,6 @@ void SIMCOM900::WhileSimpleRead()
 	while(_cell.available()>0){
 		datain=_cell.read();
 		if(datain>0){
-			Serial.print(datain);
 		}
 	}
 }
@@ -941,10 +937,6 @@ char GSM::ComparePhoneNumber(byte position, char *phone_number)
   ret_val = 0; // numbers are not the same so far
   if (position == 0) return (-3);
   if (1 == GetPhoneNumber(position, sim_phone_number)) {
-  Serial.print("CHIAMANTE ");
-  Serial.println(phone_number);
-  Serial.print("SALVATO ");
-  Serial.println(sim_phone_number);
   
     // there is a valid number at the spec. SIM position
     // -------------------------------------------------

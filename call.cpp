@@ -185,12 +185,8 @@ byte CallGSM::CallStatusWithAuth(char *phone_number,
       if (p_char != NULL) {
         *p_char = 0; // end of string
         strcpy(phone_number, (char *)(p_char1));
-		Serial.print("ATTESO: ");
-		Serial.println(phone_number);
       }
 	  else
-		//Serial.println(gsm.comm_buf);
-		Serial.println("NULL");
       
       if ( (ret_val == CALL_INCOM_VOICE_NOT_AUTH) 
            || (ret_val == CALL_INCOM_DATA_NOT_AUTH)) {

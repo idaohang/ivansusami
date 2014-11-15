@@ -95,6 +95,7 @@ void get_gps_data()
 {
 	uint32_t t0 = millis();
 	boolean gotdata = false;
+	uint16_t was181 = 0;
 
 	while (((millis() - t0) < (SERIAL_GPS_LISTEN_TIME / 16)) || (Serial.available()))
 	{
@@ -109,11 +110,15 @@ void get_gps_data()
 		{
 #ifdef SERIAL_GPS_UBLOX
 			c = (uint8_t)cc;
+			if (c == 181)
+			{
+				was181++;
+			}
 #endif
 			if (gps_new_frame(c))
 			{
 #ifdef SERIAL_DEBUG
-				debug_port.println(F("New GPS frame decoded"));
+				//debug_port.println(F("New GPS frame decoded"));
 #endif
 				current_fix.dt = millis();
 				gotdata = true;
@@ -124,7 +129,8 @@ void get_gps_data()
 	if (!gotdata)
 	{
 #ifdef SERIAL_DEBUG
-		debug_port.println(F("No GPS frames found"));
+		debug_port.print(F("No GPS frames found with 181="));
+		debug_port.println(was181);
 #endif
 		current_fix.lat = 0;
 		current_fix.lon = 0;
@@ -136,6 +142,7 @@ void get_gps_data()
 		current_fix.fix = 0;
 		current_fix.dt = millis();
 	}
+	was181 = 0;
 }
 
 void process_gps_data()
@@ -725,7 +732,7 @@ void process_sms_outbound_queue()
 		sprintf(sms_buf, sms_error.msg);
 		if (CHECK_OWNER)	// send error messages to owner, if configured, otherwise ignore
 		{
-			//sms.SendSMS(owner_phone_number, sms_buf);
+			sms.SendSMS(owner_phone_number, sms_buf);
 		}
 		sms_error.sms_type = SMS_NONE;
 	}
