@@ -424,7 +424,6 @@ bool gps_new_frame(uint8_t data)
 		_payload_counter = 0;				// prepare to receive payload
 		break;
 	case 6:
-		digitalWrite(13, HIGH);
 		_ck_b += (_ck_a += data);			// checksum byte
 		if (_payload_counter < sizeof(_buffer))
 		{

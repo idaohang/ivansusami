@@ -9,8 +9,8 @@
 
 //#define SERIAL_GPS_NMEA					// define only ONE of these options
 #define SERIAL_GPS_UBLOX				// define only ONE of these options. UBLOX is not implemented yet
-#define SERIAL_GPS_SPEED 115200
-#define SERIAL_GPS_LISTEN_TIME	10000	// milliseconds
+#define SERIAL_GPS_SPEED 57600
+#define SERIAL_GPS_LISTEN_TIME	3000	// milliseconds
 //#define SERIAL_GPS_SHARED				// GPS module shared with flight controller => unable to sleep, change precision etc.
 
 #define SERIAL_SMS_RX_PIN 7

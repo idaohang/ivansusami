@@ -93,7 +93,6 @@ uint8_t reg;							// configuration,status and state register
 
 void get_gps_data()
 {
-	debug_port.println(F("get_gps_data() entry"));
 	uint32_t t0 = millis();
 	boolean gotdata = false;
 
@@ -101,23 +100,31 @@ void get_gps_data()
 	{
 #if defined(SERIAL_GPS_NMEA)
 		char c = Serial.read();
-#elif defined(SERIAL_GPS_UBLOX)
-		uint8_t c = Serial.read();
-#endif
 		if (c > 0)
+#elif defined(SERIAL_GPS_UBLOX)
+		uint8_t c;
+		int cc = Serial.read();
+		if (cc >= 0)
+#endif
 		{
+#ifdef SERIAL_GPS_UBLOX
+			c = (uint8_t)cc;
+#endif
 			if (gps_new_frame(c))
 			{
-				debug_port.println(F("GPS_NEW_FRAME"));
+#ifdef SERIAL_DEBUG
+				debug_port.println(F("New GPS frame decoded"));
+#endif
 				current_fix.dt = millis();
 				gotdata = true;
 			}
 		}
 	}
+
 	if (!gotdata)
 	{
 #ifdef SERIAL_DEBUG
-		//debug_port.println(F("No GPS data"));
+		debug_port.println(F("No GPS frames found"));
 #endif
 		current_fix.lat = 0;
 		current_fix.lon = 0;
@@ -129,7 +136,6 @@ void get_gps_data()
 		current_fix.fix = 0;
 		current_fix.dt = millis();
 	}
-	debug_port.println(F("get_gps_data() exit"));
 }
 
 void process_gps_data()
@@ -516,6 +522,7 @@ void process_sms_orders()
 	char	sms_text[SMS_MAX_LENGTH];
 
 	unread_sms_position = sms.IsSMSPresent(SMS_UNREAD);
+
 	while (unread_sms_position > 0)
 	{
 
@@ -531,6 +538,7 @@ void process_sms_orders()
 		}
 		unread_sms_position = sms.IsSMSPresent(SMS_UNREAD);
 	}
+
 }
 
 boolean send_sms(uint8_t i, char *sms_buf)
@@ -543,7 +551,6 @@ boolean send_sms(uint8_t i, char *sms_buf)
 	debug_port.println(sms_queue[i].recepient);
 
 #endif
-
 
 	if (sms.SendSMS(sms_queue[i].recepient, sms_buf) == 1)	// SMS sent
 	{
@@ -718,7 +725,7 @@ void process_sms_outbound_queue()
 		sprintf(sms_buf, sms_error.msg);
 		if (CHECK_OWNER)	// send error messages to owner, if configured, otherwise ignore
 		{
-			sms.SendSMS(owner_phone_number, sms_buf);
+			//sms.SendSMS(owner_phone_number, sms_buf);
 		}
 		sms_error.sms_type = SMS_NONE;
 	}
@@ -846,6 +853,7 @@ void loop()
 {
 	static uint32_t last_location_sent_time = 0;			// time of previously sent location SMS in RATE mode
 	get_gps_data();
+
 	process_gps_data();
 
 #ifdef SEND_ARMED		// send armed confirmation to owner
@@ -864,6 +872,7 @@ void loop()
 		}
 	}
 #endif
+
 
 	process_sms_orders();
 	write_config(false);		// write to EEPROM if state of config has changed, will always write at first cycle
