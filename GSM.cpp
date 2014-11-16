@@ -500,9 +500,7 @@ byte GSM::IsRxFinished(void)
 	#ifdef DEBUG_GSMRX
 		
 			DebugPrint("\r\nDEBUG: reception timeout", 0);			
-			Serial.print((unsigned long)(millis() - prev_time));	
 			DebugPrint("\r\nDEBUG: start_reception_tmout\r\n", 0);			
-			Serial.print(start_reception_tmout);	
 			
 		
 	#endif
@@ -569,9 +567,7 @@ byte GSM::IsRxFinished(void)
 	#ifdef DEBUG_GSMRX
 		
 			DebugPrint("\r\nDEBUG: intercharacter", 0);			
-<			Serial.print((unsigned long)(millis() - prev_time));	
 			DebugPrint("\r\nDEBUG: interchar_tmout\r\n", 0);			
-			Serial.print(interchar_tmout);	
 			
 		
 	#endif
@@ -615,11 +611,9 @@ byte GSM::IsStringReceived(char const *compare_string)
 		#ifdef DEBUG_GSMRX
 			DebugPrint("DEBUG: Compare the string: \r\n", 0);
 			for (int i=0; i<comm_buf_len; i++){
-				Serial.print(byte(comm_buf[i]));	
 			}
 			
 			DebugPrint("\r\nDEBUG: with the string: \r\n", 0);
-			Serial.print(compare_string);	
 			DebugPrint("\r\n", 0);
 		#endif
 	*/

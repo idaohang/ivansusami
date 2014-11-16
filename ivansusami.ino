@@ -95,7 +95,6 @@ void get_gps_data()
 {
 	uint32_t t0 = millis();
 	boolean gotdata = false;
-	uint16_t was181 = 0;
 
 	while (((millis() - t0) < (SERIAL_GPS_LISTEN_TIME / 16)) || (Serial.available()))
 	{
@@ -110,27 +109,21 @@ void get_gps_data()
 		{
 #ifdef SERIAL_GPS_UBLOX
 			c = (uint8_t)cc;
-			if (c == 181)
-			{
-				was181++;
-			}
 #endif
 			if (gps_new_frame(c))
 			{
-#ifdef SERIAL_DEBUG
-				//debug_port.println(F("New GPS frame decoded"));
-#endif
 				current_fix.dt = millis();
 				gotdata = true;
 			}
 		}
 	}
 
+	gps_reset_parser();
+
 	if (!gotdata)
 	{
 #ifdef SERIAL_DEBUG
-		debug_port.print(F("No GPS frames found with 181="));
-		debug_port.println(was181);
+		debug_port.println(F("No GPS frames found"));
 #endif
 		current_fix.lat = 0;
 		current_fix.lon = 0;
@@ -142,7 +135,6 @@ void get_gps_data()
 		current_fix.fix = 0;
 		current_fix.dt = millis();
 	}
-	was181 = 0;
 }
 
 void process_gps_data()
@@ -150,7 +142,7 @@ void process_gps_data()
 	if (current_fix.fix == 3)	// we have 3D fix
 	{
 #ifdef SERIAL_DEBUG
-		//debug_port.println(F("GPS 3D fix"));
+		debug_port.println(F("GPS 3D fix"));
 #endif
 		if ((reg & STATUS_ARMED) != STATUS_ARMED)
 		{
@@ -161,7 +153,7 @@ void process_gps_data()
 	else if (current_fix.fix == 2)
 	{
 #ifdef SERIAL_DEBUG
-		//debug_port.println(F("GPS 2D fix"));
+		debug_port.println(F("GPS 2D fix"));
 #endif
 		if ((reg & STATUS_ARMED) != STATUS_ARMED)
 		{
@@ -172,7 +164,7 @@ void process_gps_data()
 #ifdef SERIAL_DEBUG
 	else
 	{
-		//debug_port.println(F("GPS no fix"));
+		debug_port.println(F("GPS no fix"));
 	}
 #endif
 }
@@ -880,8 +872,8 @@ void loop()
 	}
 #endif
 
-
 	process_sms_orders();
+
 	write_config(false);		// write to EEPROM if state of config has changed, will always write at first cycle
 
 	if (((reg & STATE_BURST) == STATE_BURST) && CHECK_OWNER)	// send location SMS every cycle in BURST mode

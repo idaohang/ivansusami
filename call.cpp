@@ -329,9 +329,6 @@ char CallGSM::DetDTMF()
 	char dtmf_char='-';
 	gsm.WaitResp(1000, 500);
 	{
-		//Serial.print("BUF: ");
-		//Serial.println((char *)gsm.comm_buf);
-		//Serial.println("end");
 		p_char = strstr((char *)(gsm.comm_buf),"+DTMF:");
 		if (p_char != NULL) {
 			p_char1 = p_char+6;  //we are on the first char of BCS

@@ -15,8 +15,7 @@
         if (nSerialStream->available() > 0)
 	  {
           r=nSerialStream->read();
-		  //if(debug)
-			//Serial.print(r);
+
           return r;
         }
       }

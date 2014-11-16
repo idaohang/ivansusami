@@ -176,15 +176,12 @@ boolean SIMCOM900::readSMS(char* msg, int msglength, char* number, int nlength)
 	// #ifdef MEGA
 	//index=_cell.read();
 	// #endif
-	// Serial.println("DEBUG");
 	// #ifdef UNO
 		// _tf.getString("\",\"", "\"", number, nlength);
 	// #endif
-	// Serial.println("PRIMA");
 	// #ifdef MEGA
 		// _cell.getString("\",\"", "\"", number, nlength);
 	// #endif
-	// Serial.println("DEBUG");
 	// #ifdef UNO
 		// _tf.getString("\n", "\nOK", msg, msglength);
 	// #endif
@@ -194,8 +191,6 @@ boolean SIMCOM900::readSMS(char* msg, int msglength, char* number, int nlength)
 	
     SimpleWrite(F("AT+CMGD="));
 	SimpleWriteln(index);
-	// Serial.print("VAL= ");
-	// Serial.println(index);
     gsm.WaitResp(5000, 50, "OK"); 
     return true;
   };

@@ -5,6 +5,7 @@
 gps_data_t current_fix;
 gps_data_t last_3d_fix;
 gps_data_t last_2d_fix;
+uint8_t x_msg_id = 99;
 
 int32_t wrap_18000(int32_t error)
 {
@@ -269,10 +270,10 @@ enum ubs_protocol_bytes
 	CLASS_CFG = 0x06,
 	MSG_ACK_NACK = 0x00,
 	MSG_ACK_ACK = 0x01,
-	MSG_POSLLH = 0x2,
-	MSG_STATUS = 0x3,
-	MSG_DOP = 0x4,
-	MSG_SOL = 0x6,
+	MSG_POSLLH = 0x02,
+	MSG_STATUS = 0x03,
+	MSG_DOP = 0x04,
+	MSG_SOL = 0x06,
 	MSG_VELNED = 0x12,
 	MSG_CFG_PRT = 0x00,
 	MSG_CFG_RATE = 0x08,
@@ -335,7 +336,7 @@ void _update_checksum(uint8_t *data, uint8_t len, uint8_t &ck_a, uint8_t &ck_b)
 	}
 }
 
-bool UBLOX_parse_gps(void)
+void UBLOX_parse_gps(void)
 {
 	switch (_msg_id)
 	{
@@ -343,7 +344,9 @@ bool UBLOX_parse_gps(void)
 		current_fix.lon	                = _buffer.posllh.longitude;
 		current_fix.lat	                = _buffer.posllh.latitude;
 		current_fix.alt 	 	        = _buffer.posllh.altitude_msl / 10 / 100;     //alt in m
-		_new_position = true;
+		break;
+	case MSG_STATUS:
+		// just do nothing
 		break;
 	case MSG_DOP:
 		current_fix.hdop                = ((float)_buffer.dop.hdop) / 100.0;
@@ -359,29 +362,27 @@ bool UBLOX_parse_gps(void)
 		break;
 	case MSG_VELNED:
 		current_fix.speed 				= (uint8_t)(_buffer.velned.speed_2d * 36 / 10000);
-		_new_speed = true;
 		break;
 	default:
-		return false;
+		break;
 	}
-
-	// we only return true when we get new position and speed data
-	// this ensures we don't use stale data
-	/*
-	if (_new_position && _new_speed)
-	{
-		_new_speed = _new_position = false;
-		return true;
-	}
-	return false;
-	*/
-	return true;
 }
 
+void gps_reset_parser()
+{
+	// reset parser static variables
+	_ck_a = 0;
+	_ck_b = 0;
+	_step = 0;
+	_msg_id = 0;
+	_payload_length = 0;
+	_payload_counter = 0;
+	_class = 0;
+}
 
 bool gps_new_frame(uint8_t data)
 {
-	bool parsed = false;
+	boolean parsed = false;
 
 	switch (_step)
 	{
@@ -390,13 +391,14 @@ bool gps_new_frame(uint8_t data)
 		if (PREAMBLE2 == data)
 		{
 			_step++;
+			_payload_length = 0;
+			_payload_counter = 0;
 			break;
 		}
 		_step = 0;
 	case 0:
 		if (PREAMBLE1 == data) _step++;
 		break;
-
 	case 2:
 		_step++;
 		_class = data;
@@ -410,18 +412,28 @@ bool gps_new_frame(uint8_t data)
 	case 4:
 		_step++;
 		_ck_b += (_ck_a += data);			// checksum byte
-		_payload_length = data;				// payload length low byte
+		if ((data > 52) || (data == 0))		// NAV-SOL length = 52 bytes
+		{
+			_step = 0;
+		}
+		else
+		{
+			_payload_length = data;				// payload length low byte
+		}
 		break;
 	case 5:
 		_step++;
 		_ck_b += (_ck_a += data);			// checksum byte
-		_payload_length += (uint16_t)(data << 8);
-		if (_payload_length > 512)
+
+		if (data > 0x03)					// i.e., when _payload_length > 1023
 		{
-			_payload_length = 0;
 			_step = 0;
 		}
-		_payload_counter = 0;				// prepare to receive payload
+		else
+		{
+			_payload_length += (uint16_t)(data << 8);
+			_payload_counter = 0;				// prepare to receive payload
+		}
 		break;
 	case 6:
 		_ck_b += (_ck_a += data);			// checksum byte
@@ -434,15 +446,20 @@ bool gps_new_frame(uint8_t data)
 		break;
 	case 7:
 		_step++;
-		if (_ck_a != data) _step = 0;						// bad checksum
+		if (_ck_a != data)
+		{
+			_step = 0;
+		}
 		break;
 	case 8:
 		_step = 0;
-		if (_ck_b != data)  break; 							// bad checksum
-		if (UBLOX_parse_gps())
+		if (_ck_b != data)
 		{
-			parsed = true;
+			break;
 		}
+		UBLOX_parse_gps();
+		parsed = true;
+		break;
 	} //end switch
 	return parsed;
 }
