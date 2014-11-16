@@ -118,7 +118,9 @@ void get_gps_data()
 		}
 	}
 
+#ifdef SERIAL_GPS_UBLOX
 	gps_reset_parser();
+#endif
 
 	if (!gotdata)
 	{
@@ -796,7 +798,7 @@ void write_config(boolean force)
 void setup()
 {
 	pinMode(13, OUTPUT);
-	TCCR0B = TCCR0B & 0b11111000 | 0x05;	// set PWN frequency to low
+	TCCR0B = TCCR0B & 0b11111000 | 0x05;	// set hw PWM frequency to low, this will affect millis() and delay(), thus all times should be divided by 16
 	read_config();
 #ifdef CAN_CUTOFF
 	pinMode(CUTOFF_PIN, OUTPUT);
