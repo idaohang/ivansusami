@@ -17,7 +17,5 @@ extern gps_data_t current_fix;
 extern gps_data_t last_3d_fix;
 extern gps_data_t last_2d_fix;
 
-extern uint8_t		x_msg_id;
-
 bool gps_new_frame(uint8_t data);
 void gps_reset_parser(void);

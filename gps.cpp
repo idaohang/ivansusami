@@ -5,7 +5,6 @@
 gps_data_t current_fix;
 gps_data_t last_3d_fix;
 gps_data_t last_2d_fix;
-uint8_t x_msg_id = 99;
 
 int32_t wrap_18000(int32_t error)
 {
