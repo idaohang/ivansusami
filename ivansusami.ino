@@ -265,15 +265,12 @@ void execute_pcommand(uint8_t command, long *params, uint8_t param_count)
 		}
 		else
 		{
-			if (params[0] < 0)
-			{
-				params[0] = 0;
-			}
-			location_rate_interval = params[0];
+			location_rate_interval = 0;
 #ifdef SEND_CONFIRMATION
 			enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
 #endif
 		}
+		write_config(true);	// save new rate in EEPROM
 		break;
 	}
 }
@@ -337,16 +334,30 @@ void execute_command(uint8_t command)
 		break;
 	case 3:
 		// turn on owner check
-		reg |= CONFIG_CHECK_OWNER;
-		strcpy(owner_phone_number, caller_phone_number);
-		// will always send confirmation for this command
-		enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
+		if (!CHECK_OWNER)	// only when owner is not set
+		{
+			reg |= CONFIG_CHECK_OWNER;
+			strcpy(owner_phone_number, caller_phone_number);
+			// will always send confirmation for this command
+			enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
+		}
+		else
+		{
+			enqueue_sms(SMS_EXEC_FAILED, command, caller_phone_number, NULL);
+		}
 		break;
 	case 7:
 		// turn off owner check
-		reg &= ~CONFIG_CHECK_OWNER;
-		// will always send confirmation for this command
-		enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
+		if (CHECK_OWNER)
+		{
+			reg &= ~CONFIG_CHECK_OWNER;
+			// will always send confirmation for this command
+			enqueue_sms(SMS_EXEC_COMPLETE, command, caller_phone_number, NULL);
+		}
+		else
+		{
+			enqueue_sms(SMS_EXEC_FAILED, command, caller_phone_number, NULL);
+		}
 		break;
 	case 8:
 		// turn off PIN check
@@ -734,8 +745,9 @@ void process_sms_outbound_queue()
 
 void read_config()
 {
-	if (EEPROM.read(4) == 255)	// notinitialized, PIN string should not contain 0xFF
+	if (EEPROM.read(10) == 255)	// notinitialized, OWNER string should not contain 0xFF
 	{
+		// TBD some signalling
 	}
 	else
 	{
@@ -744,12 +756,6 @@ void read_config()
 		eeprom_read_block((void *)&master_pin, (void *)3, sizeof(master_pin));
 		eeprom_read_block((void *)&owner_phone_number, (void *)(4 + PIN_LENGTH - 1), sizeof(owner_phone_number));
 	}
-	/*
-	EEPROM_read(0, reg);
-	EEPROM_read(1, location_rate_interval);
-	EEPROM_read(3, master_pin);
-	EEPROM_read(4 + PIN_LENGTH - 1, owner_phone_number);
-	*/
 #ifdef SERIAL_DEBUG
 	debug_port.print(F("reg="));
 	debug_port.println(reg);
@@ -784,12 +790,6 @@ void write_config(boolean force)
 		eeprom_write_block((const void *)&location_rate_interval, (void *)1, sizeof(location_rate_interval));
 		eeprom_write_block((const void *)&master_pin, (void *)3, sizeof(master_pin));
 		eeprom_write_block((const void *)&owner_phone_number, (void *)(4 + PIN_LENGTH - 1), sizeof(owner_phone_number));
-		/*
-		EEPROM_write(0, reg);
-		EEPROM_write(1, location_rate_interval);
-		EEPROM_write(3, master_pin);
-		EEPROM_write(4 + PIN_LENGTH - 1, owner_phone_number);
-		*/
 		prev_reg = reg;
 		// need to add CRC, util.h has crc8()
 	}

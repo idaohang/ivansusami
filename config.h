@@ -17,7 +17,7 @@
 
 #define CAN_ALARM						// tracker has alarm beeper
 #define CAN_CUTOFF						// tracker has servo-based cutoff switch
-#define CAN_SLEEP						// GPS module can be sent to sleep mode, disable this setting if SERIAL_GPS_SHARED is defined
+//#define CAN_SLEEP						// GPS module can be sent to sleep mode, disable this setting if SERIAL_GPS_SHARED is defined
 
 //#define SEND_CONFIRMATION				// send SMS confirmation for each successfully executed command
 #define SEND_HELLO						// send SMS to device owner (if set) upon tracker successful boot-up
