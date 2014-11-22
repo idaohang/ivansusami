@@ -343,13 +343,16 @@ void UBLOX_parse_gps(void)
 		current_fix.lon	                = _buffer.posllh.longitude;
 		current_fix.lat	                = _buffer.posllh.latitude;
 		current_fix.alt 	 	        = _buffer.posllh.altitude_msl / 10 / 100;     //alt in m
+		_new_position = true;
 		break;
 	case MSG_STATUS:
 		// just do nothing
+		_new_position = false;
 		break;
 	case MSG_DOP:
 		current_fix.hdop                = ((float)_buffer.dop.hdop) / 100.0;
 		current_fix.vdop	            = ((float)_buffer.dop.vdop) / 100.0;
+		_new_position = false;
 		break;
 	case MSG_SOL:
 		current_fix.fix 				= _buffer.solution.fix_type;
@@ -358,11 +361,14 @@ void UBLOX_parse_gps(void)
 			current_fix.fix = 3;
 		}
 		current_fix.numsat 				= _buffer.solution.satellites;
+		_new_position = false;
 		break;
 	case MSG_VELNED:
 		current_fix.speed 				= (uint8_t)(_buffer.velned.speed_2d * 36 / 10000);
+		_new_position = false;
 		break;
 	default:
+		_new_position = false;
 		break;
 	}
 }
@@ -457,7 +463,10 @@ bool gps_new_frame(uint8_t data)
 			break;
 		}
 		UBLOX_parse_gps();
-		parsed = true;
+		if (_new_position)
+		{
+			parsed = true;
+		}
 		break;
 	} //end switch
 	return parsed;
